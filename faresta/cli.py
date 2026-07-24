@@ -102,12 +102,13 @@ def ask(question, provider, model, yes):
 
 
 BANNER = """
-[bold cyan]███████╗ █████╗ ██████╗ ███████╗███████╗████████╗ █████╗      ██████╗ ██████╗ ██████╗ ███████╗
-██╔════╝██╔══██╗██╔══██╗██╔════╝██╔════╝╚══██╔══╝██╔══██╗    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
-█████╗  ███████║██████╔╝█████╗  █████╗     ██║   ███████║    ██║     ██║   ██║██║  ██║█████╗
-██╔══╝  ██╔══██║██╔══██╗██╔══╝  ██╔══╝     ██║   ██╔══██║    ██║     ██║   ██║██║  ██║██╔══╝
-██║     ██║  ██║██║  ██║███████╗██║        ██║   ██║  ██║    ╚██████╗╚██████╔╝██████╔╝███████╗
-╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
+[bold cyan]
+    ███████▏ █████▏ ██████▏ ██████▏ ███████▏███████▏███████▏ █████▏
+    ██╚████╝▕██╝╝██▏▕██╝╝██▏▕██╚████╝▕██╚████╝╚╝╝██╚╝╝▕██╝╝██▏
+    █████▏  ███████▇▏██████▝▏█████▏  █████▏     ██▇   ███████▇▏
+    ██╚╝  ▕██╝╝██▏▕██╝╝██▏▕██╝╝  ▕██╝╝     ██▇   ▕██╝╝██▏
+    ██▇     ██▇  ██▏██▇  ██▏███████▏██▇        ██▇   ██▇  ██▏
+    ╚╝     ╚╝  ╚╝╚╝  ╚╝╚╝╚╝╚╝╚╝╚╝╚╝        ╚╝   ╚╝  ╚╝
 [/bold cyan]
 """
 
@@ -160,13 +161,56 @@ def _print_welcome(config):
     print("\033[2J\033[H", end="", flush=True)
     status = "[green]✓[/green]" if config.api_key else "[yellow]⚠ butuh /login[/yellow]"
     console.print(Panel(
-        BANNER + f"\n[bold cyan]v0.5.0[/bold cyan] [dim]|[/dim] [cyan]{config.provider}/{config.model}[/cyan] [dim]|[/dim] Status: {status}",
-        box=box.HEAVY, border_style="cyan", padding=(1, 2), subtitle="[dim]ketik /help untuk bantuan[/dim]"
+        BANNER + f"\n[bold cyan]v0.6.0[/bold cyan] [dim]|[/dim] [cyan]{config.provider}/{config.model}[/cyan] [dim]|[/dim] Status: {status}",
+        box=box.HEAVY, border_style="cyan", padding=(1, 2), subtitle="[dim]AI Coding Assistant CLI — ketik /help[/dim]"
     ))
     console.print("")
     if not config.api_key:
         console.print("  [yellow]⚠ API key belum di-set — ketik /login[/yellow]")
         console.print("")
+
+
+@main.command()
+def update():
+    """Update Faresta Code to the latest version."""
+    console.print("[cyan]Memeriksa pembaruan...[/cyan]")
+    import os
+    import subprocess
+    import sys
+
+    install_dir = os.environ.get("FARESTA_DIR") or os.path.expanduser("~/.faresta")
+    if not os.path.isdir(install_dir):
+        print_error("Tidak dapat menemukan instalasi Faresta Code.")
+        console.print("  Jalankan ulang installer: curl -fsSL https://raw.githubusercontent.com/panelddos/faresta-code/main/install.sh | sh")
+        return
+
+    try:
+        subprocess.run(["git", "-C", install_dir, "pull", "--ff-only"], check=True, capture_output=True)
+    except subprocess.CalledProcessError:
+        print_warning("Gagal pull update dari git. Coba manual: git pull di ~/.faresta")
+        return
+
+    venv_pip = os.path.join(install_dir, "venv", "bin", "pip")
+    if not os.path.isfile(venv_pip):
+        venv_pip = os.path.join(install_dir, "venv", "Scripts", "pip.exe")
+
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "install", "-e", install_dir], check=True, capture_output=True)
+    except subprocess.CalledProcessError:
+        if os.path.isfile(venv_pip) and os.access(venv_pip, os.X_OK):
+            try:
+                subprocess.run([venv_pip, "install", "-e", install_dir], check=True, capture_output=True)
+            except subprocess.CalledProcessError as e2:
+                print_error(f"Gagal update: {e2.stderr.decode()[:200]}")
+                return
+        else:
+            try:
+                subprocess.run([sys.executable, "-m", "pip", "install", "-e", install_dir, "--user"], check=True, capture_output=True)
+            except subprocess.CalledProcessError:
+                print_error("Gagal update. Coba manual: pip install -e ~/.faresta")
+                return
+
+    print_success("Faresta Code berhasil diupdate ke versi terbaru!")
 
 
 def _inject_project_context(agent):
@@ -224,8 +268,29 @@ def _repl(agent, config, llm):
         with console.status("[bold cyan]  thinking...[/bold cyan]", spinner="dots"):
             try:
                 response = agent.run(user_input)
-            except Exception as e:
-                console.print(f"[red]Error: {e}[/red]")
+            except ConnectionError:
+                console.print("\n[red]  ✖ Gagal terhubung ke provider AI. Periksa koneksi internet dan API key.[/red]")
+                _print_status_bar(agent, config)
+                continue
+            except TimeoutError:
+                console.print("\n[red]  ✖ Provider AI tidak merespon — coba lagi nanti atau ganti model/provider.[/red]")
+                _print_status_bar(agent, config)
+                continue
+            except ValueError as e:
+                msg = str(e)
+                if "api key" in msg.lower() or "auth" in msg.lower():
+                    console.print("\n[red]  ✖ API Key tidak valid. Ketik /login untuk set API key baru.[/red]")
+                elif "rate" in msg.lower() or "quota" in msg.lower():
+                    console.print("\n[red]  ✖ Rate limit tercapai atau quota habis. Tunggu beberapa saat.[/red]")
+                else:
+                    console.print(f"\n[red]  ✖ Data tidak valid: {msg[:100]}[/red]")
+                _print_status_bar(agent, config)
+                continue
+            except Exception:
+                import traceback
+                tb = traceback.format_exc()
+                console.print(f"\n[red]  ✖ Terjadi kesalahan yang tidak terduga.[/red]")
+                console.print(f"[dim]  Detail: {tb[:200]}[/dim]")
                 _print_status_bar(agent, config)
                 continue
 
@@ -345,6 +410,7 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
   [cyan]/deny[/cyan]          Tolak tool (proyek ini)
   [cyan]/project[/cyan]       Lihat config proyek
   [cyan]/export[/cyan]        Export chat ke file .md
+  [cyan]/update[/cyan]        Update Faresta Code ke versi terbaru
   [cyan]exit/quit[/cyan]      Keluar""", title="Help", box=box.ROUNDED, border_style="cyan"))
 
     elif command == "/login":
@@ -518,6 +584,21 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
         path = parts[1] if len(parts) > 1 else f"faresta-chat-{agent.session_id}.md"
         _export_chat(agent, config, path)
         _print_status_bar(agent, config)
+
+    elif command == "/update":
+        _exit_alt_screen()
+        import subprocess, sys, os
+        install_dir = os.environ.get("FARESTA_DIR") or os.path.expanduser("~/.faresta")
+        console.print("[cyan]Update Faresta Code...[/cyan]")
+        try:
+            subprocess.run(["git", "-C", install_dir, "pull", "--ff-only"], check=True, capture_output=True)
+            subprocess.run([sys.executable, "-m", "pip", "install", "-e", install_dir, "--quiet"], check=True, capture_output=True)
+            print_success("Update berhasil! Restart chat untuk menggunakan versi baru.")
+        except subprocess.CalledProcessError as e:
+            print_error(f"Update gagal: {e.stderr.decode()[:200]}")
+        input("[Enter] untuk kembali...")
+        _enter_alt_screen()
+        _print_welcome(config)
 
     elif command in ("/project", "/project-config"):
         proj = agent.project_config

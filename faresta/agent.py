@@ -71,10 +71,23 @@ class Agent:
             has_tool_calls = False
 
             with console.status("[bold cyan]Thinking...[/bold cyan]", spinner="dots"):
-                assistant_msg = self.llm.chat_non_streaming(
-                    messages=self.messages,
-                    tools=self._get_tools_for_api(),
-                )
+                try:
+                    assistant_msg = self.llm.chat_non_streaming(
+                        messages=self.messages,
+                        tools=self._get_tools_for_api(),
+                    )
+                except Exception as e:
+                    err = str(e).lower()
+                    if "401" in err or "unauthorized" in err or "auth" in err:
+                        return "✖ API Key tidak valid. Ketik /login untuk set API key baru."
+                    if "429" in err or "rate" in err or "quota" in err:
+                        return "✖ Rate limit / quota habis. Tunggu beberapa saat atau ganti provider."
+                    if "timeout" in err or "timed out" in err:
+                        return "✖ Provider AI timeout. Coba model yang lebih kecil atau effort lebih rendah."
+                    if "context" in err and "length" in err or "too long" in err or "maximum" in err and "token" in err:
+                        self.messages = [self.messages[0]] + self.messages[-4:]
+                        return "✖ Konteks penuh — percakapan lama dihapus, silakan kirim ulang."
+                    raise
 
             response_text = assistant_msg.get("content", "")
             tool_calls = assistant_msg.get("tool_calls", [])

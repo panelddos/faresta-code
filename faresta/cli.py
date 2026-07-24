@@ -56,8 +56,11 @@ def get_provider(config: Config) -> LLMProvider | None:
             effort=config.effort,
         )
 
-    known = ", ".join(list(providers.keys()) + list(COMPATIBLE_PROVIDERS.keys()))
+    known = ", ".join(providers.keys())
+    if COMPATIBLE_PROVIDERS:
+        known += ", " + ", ".join(COMPATIBLE_PROVIDERS.keys())
     print_error(f"Unknown provider '{config.provider}'. Available: {known}")
+    print_info("Tip: Cek config dengan: faresta config-show")
     sys.exit(1)
 
 
@@ -419,6 +422,7 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
   [cyan]/deny[/cyan]          Tolak tool (proyek ini)
   [cyan]/project[/cyan]       Lihat config proyek
   [cyan]/export[/cyan]        Export chat ke file .md
+  [cyan]/social[/cyan]        Cek status & connect social (Twitter, Telegram, Discord)
   [cyan]/update[/cyan]        Update Faresta Code ke versi terbaru
   [cyan]exit/quit[/cyan]      Keluar""", title="Help", box=box.ROUNDED, border_style="cyan"))
 
@@ -594,17 +598,59 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
         _export_chat(agent, config, path)
         _print_status_bar(agent, config)
 
+    elif command == "/social":
+        import os as _os
+        socials = {
+            "🐦 Twitter/X": {
+                "TWITTER_BEARER_TOKEN": _os.getenv("TWITTER_BEARER_TOKEN", ""),
+                "TWITTER_API_KEY": _os.getenv("TWITTER_API_KEY", ""),
+            },
+            "✈ Telegram": {
+                "TELEGRAM_BOT_TOKEN": _os.getenv("TELEGRAM_BOT_TOKEN", ""),
+            },
+            "💬 Discord": {
+                "DISCORD_WEBHOOK_URL": _os.getenv("DISCORD_WEBHOOK_URL", ""),
+            },
+        }
+        table = Table(title="Social Connections", box=box.SIMPLE, header_style="cyan")
+        table.add_column("Platform", style="yellow")
+        table.add_column("Status", style="green")
+        table.add_column("Env Vars")
+        for name, vars in socials.items():
+            configured = all(v for v in vars.values())
+            status = "[green]✓ Connected[/green]" if configured else "[dim]Not set[/dim]"
+            env_list = ", ".join(vars.keys())
+            table.add_row(name, status, env_list)
+        console.print(table)
+        console.print("[dim]Set env vars di shell sebelum menjalankan faresta, atau:\n  export TWITTER_BEARER_TOKEN=...\n  export TELEGRAM_BOT_TOKEN=...\n  export DISCORD_WEBHOOK_URL=...[/dim]")
+        _print_status_bar(agent, config)
+
     elif command == "/update":
         _exit_alt_screen()
         import subprocess, sys, os
         install_dir = os.environ.get("FARESTA_DIR") or os.path.expanduser("~/.faresta")
         console.print("[cyan]Update Faresta Code...[/cyan]")
+        git_ok = True
         try:
-            subprocess.run(["git", "-C", install_dir, "pull", "--ff-only"], check=True, capture_output=True)
-            subprocess.run([sys.executable, "-m", "pip", "install", "-e", install_dir, "--quiet"], check=True, capture_output=True)
+            subprocess.run(["git", "-C", install_dir, "pull", "--ff-only"], check=True, capture_output=True, timeout=30)
+            console.print("[green]✓ Git pull berhasil[/green]")
+        except subprocess.CalledProcessError as e:
+            err = e.stderr.decode()[:200]
+            print_warning(f"Git pull: {err}")
+            git_ok = False
+        except FileNotFoundError:
+            print_warning("Git tidak ditemukan, skip pull")
+            git_ok = False
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "-e", install_dir, "--quiet"], check=True, capture_output=True, timeout=120)
             print_success("Update berhasil! Restart chat untuk menggunakan versi baru.")
         except subprocess.CalledProcessError as e:
-            print_error(f"Update gagal: {e.stderr.decode()[:200]}")
+            err = e.stderr.decode()[:300]
+            print_error(f"Install gagal: {err}")
+            if "permission" in err.lower() or "denied" in err.lower():
+                console.print("[yellow]  Coba: sudo chown -R $(whoami) ~/.faresta[/yellow]")
+                console.print("[yellow]  Atau: sudo chmod -R +x ~/.faresta/venv/bin/*[/yellow]")
+            console.print("[dim]  Atau jalankan manual: python3 -m pip install -e ~/.faresta --user[/dim]")
         input("[Enter] untuk kembali...")
         _enter_alt_screen()
         _print_welcome(config)

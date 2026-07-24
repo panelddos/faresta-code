@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 REPO="https://github.com/panelddos/faresta-code.git"
 INSTALL_DIR="${FARESTA_DIR:-$HOME/.faresta}"
@@ -10,18 +10,18 @@ CYAN='\033[0;36m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo -e "${CYAN}╔══════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║     Faresta Code Installer v0.4.0   ║${NC}"
-echo -e "${CYAN}╚══════════════════════════════════════╝${NC}"
-echo ""
+printf "${CYAN}╔══════════════════════════════════════╗${NC}\n"
+printf "${CYAN}║     Faresta Code Installer v0.4.0   ║${NC}\n"
+printf "${CYAN}╚══════════════════════════════════════╝${NC}\n"
+printf "\n"
 
 # Check Python
-if ! command -v python3 &>/dev/null; then
-    echo -e "${YELLOW}Python 3.10+ is required but not found.${NC}"
-    echo "Install it first:"
-    echo "  Ubuntu/Debian: sudo apt install python3 python3-pip python3-venv"
-    echo "  macOS:          brew install python3"
-    echo "  Windows:        https://python.org/downloads/"
+if ! command -v python3 >/dev/null 2>&1; then
+    printf "${YELLOW}Python 3.10+ is required but not found.${NC}\n"
+    printf "Install it first:\n"
+    printf "  Ubuntu/Debian: sudo apt install python3 python3-pip python3-venv\n"
+    printf "  macOS:          brew install python3\n"
+    printf "  Windows:        https://python.org/downloads/\n"
     exit 1
 fi
 
@@ -30,34 +30,34 @@ PY_MAJOR=$(echo "$PY_VERSION" | cut -d. -f1)
 PY_MINOR=$(echo "$PY_VERSION" | cut -d. -f2)
 
 if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
-    echo -e "${YELLOW}Python 3.10+ required, found $PY_VERSION${NC}"
+    printf "${YELLOW}Python 3.10+ required, found %s${NC}\n" "$PY_VERSION"
     exit 1
 fi
 
-echo -e "${GREEN}✓${NC} Python $PY_VERSION detected"
+printf "${GREEN}✓${NC} Python %s detected\n" "$PY_VERSION"
 
 # Create bin dir
 mkdir -p "$BIN_DIR"
 
 # Clone or update repo
 if [ -d "$INSTALL_DIR" ]; then
-    echo "Updating existing installation..."
+    printf "Updating existing installation...\n"
     cd "$INSTALL_DIR"
     git pull --ff-only 2>/dev/null || true
 else
-    echo "Cloning Faresta Code from GitHub..."
+    printf "Cloning Faresta Code from GitHub...\n"
     git clone --depth 1 "$REPO" "$INSTALL_DIR"
 fi
 
 # Create virtualenv if needed
 VENV_DIR="$INSTALL_DIR/venv"
 if [ ! -d "$VENV_DIR" ]; then
-    echo "Creating virtual environment..."
+    printf "Creating virtual environment...\n"
     python3 -m venv "$VENV_DIR"
 fi
 
 # Install/upgrade
-echo "Installing dependencies..."
+printf "Installing dependencies...\n"
 "$VENV_DIR/bin/pip" install --quiet --upgrade pip setuptools wheel
 "$VENV_DIR/bin/pip" install --quiet -e "$INSTALL_DIR"
 
@@ -71,24 +71,29 @@ WRAPPEREOF
 chmod +x "$WRAPPER"
 
 # Add to PATH hint
-echo ""
-echo -e "${GREEN}✓${NC} Faresta Code installed successfully!"
-echo ""
-echo -e "  Run:  ${CYAN}faresta chat${NC}"
-echo -e "  Help: ${CYAN}faresta --help${NC}"
-echo ""
+printf "\n"
+printf "${GREEN}✓${NC} Faresta Code installed successfully!\n"
+printf "\n"
+printf "  Run:  ${CYAN}faresta chat${NC}\n"
+printf "  Help: ${CYAN}faresta --help${NC}\n"
+printf "\n"
 
-if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-    echo -e "${YELLOW}Note:${NC} Add $BIN_DIR to your PATH:"
-    echo "  export PATH=\"\$PATH:$BIN_DIR\""
-    echo ""
-    echo "Add it to ~/.bashrc or ~/.zshrc to make it permanent:"
-    echo "  echo 'export PATH=\"\$PATH:$BIN_DIR\"' >> ~/.bashrc"
-    echo "  source ~/.bashrc"
-fi
+case :$PATH: in
+    *:$BIN_DIR:*)
+        ;;
+    *)
+        printf "${YELLOW}Note:${NC} Add %s to your PATH:\n" "$BIN_DIR"
+        printf "  export PATH=\"\$PATH:%s\"\n" "$BIN_DIR"
+        printf "\n"
+        printf "Add it to ~/.bashrc or ~/.zshrc to make it permanent:\n"
+        printf "  echo 'export PATH=\"\$PATH:%s\"' >> ~/.bashrc\n" "$BIN_DIR"
+        printf "  source ~/.bashrc\n"
+        ;;
+esac
 
-echo -e "Set your API key and start using:"
-echo -e "  export OPENAI_API_KEY=sk-..."
-echo -e "  ${CYAN}faresta chat${NC}"
-echo ""
-echo -e "${CYAN}Selamat coding!${NC}"
+printf "\n"
+printf "Set your API key and start using:\n"
+printf "  export OPENAI_API_KEY=sk-...\n"
+printf "  ${CYAN}faresta chat${NC}\n"
+printf "\n"
+printf "${CYAN}Selamat coding!${NC}\n"

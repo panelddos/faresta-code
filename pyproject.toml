@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "faresta-code"
+version = "0.1.0"
+description = "AI CLI Assistant — Multi-provider LLM with interactive terminal interface"
+readme = "README.md"
+authors = [{ name = "Faresta", email = "faresta@example.com" }]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development",
+]
+keywords = ["cli", "ai", "llm", "assistant", "chat"]
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "rich>=13.0",
+    "httpx>=0.24",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "openai>=1.0",
+    "anthropic>=0.30",
+    "google-genai>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/faresta/faresta-code"
+Repository = "https://github.com/faresta/faresta-code"
+Issues = "https://github.com/faresta/faresta-code/issues"
+
+[project.scripts]
+faresta = "faresta.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["faresta*"]

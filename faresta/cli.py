@@ -132,10 +132,11 @@ def chat(provider, model, yes, resume):
     else:
         agent.add_system_prompt()
 
-    _clear_screen()
-    _print_header(config)
+    _enter_alt_screen()
+    _render_header(config)
+
     if not config.api_key:
-        console.print("  [yellow]⚠ API key belum di-set[/yellow]")
+        _render_msg("[yellow]⚠ API key belum di-set — ketik /login[/yellow]")
     console.print("")
 
     def recreate_agent():
@@ -143,15 +144,15 @@ def chat(provider, model, yes, resume):
         llm = get_provider(config)
         agent = Agent(llm, config)
         agent.add_system_prompt()
-        _print_header(config)
-        _show_model(config)
+        _render_header(config)
 
     while True:
         user_input = Prompt.ask("[bold]>[/bold]")
 
         if user_input.lower() in ("exit", "quit"):
             _save_session(agent)
-            console.print("[dim]bye bye 👋[/dim]")
+            _exit_alt_screen()
+            console.print("[dim]bye[/dim]")
             break
 
         if user_input.strip().startswith("/"):
@@ -169,25 +170,33 @@ def chat(provider, model, yes, resume):
                 continue
 
         if response:
+            _render_msg(f"[bold]you:[/bold] {user_input}")
             print_markdown(response)
 
         tool_count = len([m for m in agent.messages if m["role"] == "tool"])
         if tool_count:
-            console.print(f"[dim]— used {tool_count} tool(s)[/dim]")
-        _show_model(config)
+            _render_msg(f"[dim]— used {tool_count} tool(s)[/dim]")
 
 
-def _clear_screen():
-    print("\033[2J\033[H", end="")
+def _enter_alt_screen():
+    print("\033[?1049h\033[2J\033[H", end="", flush=True)
 
 
-def _print_header(config):
+def _exit_alt_screen():
+    print("\033[?1049l", end="", flush=True)
+
+
+def _render_header(config):
     status = "✓" if config.api_key else "✗"
-    console.print(Panel(f"[bold cyan]Faresta Code[/bold cyan]   [dim]{config.provider}[/dim] [green]{status}[/green]", box=box.MINIMAL, border_style="cyan"))
+    print("\033[H\033[2J", end="", flush=True)
+    console.print(Panel(
+        f"[bold cyan]Faresta Code[/bold cyan]   [dim]{config.provider}/{config.model}[/dim] [green]{status}[/green]",
+        box=box.MINIMAL, border_style="cyan"
+    ))
 
 
-def _show_model(config):
-    console.print(f"[dim]model: {config.provider}/{config.model}[/dim]")
+def _render_msg(msg):
+    console.print(msg)
 
 
 COMMON_MODELS = {
@@ -247,10 +256,9 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
 
     if command == "/clear":
         agent.reset()
-        _clear_screen()
-        _print_header(config)
+        _render_header(config)
         if not config.api_key:
-            console.print("  [yellow]⚠ API key belum di-set[/yellow]")
+            _render_msg("[yellow]⚠ API key belum di-set[/yellow]")
         console.print("")
 
     elif command == "/help":
@@ -268,7 +276,7 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
   [cyan]exit/quit[/cyan]      Keluar""", title="Help", box=box.ROUNDED, border_style="cyan"))
 
     elif command == "/login":
-        _clear_screen()
+        _render_header(config)
         console.print(Panel("[bold cyan]Login — Setup Provider & API Key[/bold cyan]", box=box.MINIMAL, border_style="cyan"))
         console.print("")
 
@@ -294,13 +302,10 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
             config.model = m
 
         save_config(config)
-        _clear_screen()
-        _print_header(config)
+        _render_header(config)
         if recreate_agent:
             recreate_agent()
-        else:
-            _show_model(config)
-        console.print(f"  [green]✓ Login berhasil — {config.provider}/{config.model}[/green]")
+        _render_msg(f"[green]✓ Login berhasil — {config.provider}/{config.model}[/green]")
         console.print("")
 
     elif command == "/provider":
@@ -321,10 +326,8 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
         if recreate_agent:
             recreate_agent()
         else:
-            _clear_screen()
-            _print_header(config)
-            _show_model(config)
-        console.print(f"  [green]✓ Provider: {config.provider}[/green]")
+            _render_header(config)
+        _render_msg(f"[green]✓ Provider: {config.provider}[/green]")
         console.print("")
 
     elif command == "/model":
@@ -334,8 +337,7 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
             save_config(config)
             if recreate_agent:
                 recreate_agent()
-            _show_model(config)
-            console.print(f"  [green]✓ Model: {config.model}[/green]")
+            _render_msg(f"[green]✓ Model: {config.model}[/green]")
         else:
             print_error("Model tidak valid")
 

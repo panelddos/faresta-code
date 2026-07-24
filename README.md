@@ -2,7 +2,7 @@
 
 **AI CLI Assistant** — Multi-provider LLM dengan interface interaktif di terminal.
 
-Dibuat oleh [Faresta](https://github.com/faresta).
+Dibuat oleh [Faresta](https://github.com/panelddos).
 
 ## Instalasi
 
@@ -13,7 +13,7 @@ pip install faresta-code
 Atau instal dari source:
 
 ```bash
-git clone https://github.com/faresta/faresta-code.git
+git clone https://github.com/panelddos/faresta-code.git
 cd faresta-code
 pip install -e .
 ```

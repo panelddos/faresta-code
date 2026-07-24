@@ -7,7 +7,7 @@ name = "faresta-code"
 version = "0.1.0"
 description = "AI CLI Assistant — Multi-provider LLM with interactive terminal interface"
 readme = "README.md"
-authors = [{ name = "Faresta", email = "faresta@example.com" }]
+authors = [{ name = "Faresta" }]
 license = { text = "MIT" }
 classifiers = [
     "Development Status :: 3 - Alpha",

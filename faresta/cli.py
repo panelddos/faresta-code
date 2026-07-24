@@ -16,7 +16,7 @@ from .tools.core import register_core_tools
 from .tools.social import register_social_tools
 from .utils.display import (
     console, print_welcome, print_markdown, print_error,
-    print_info, print_success, input_user,
+    print_info, print_success, print_warning, input_user,
 )
 
 

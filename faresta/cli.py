@@ -101,14 +101,14 @@ def ask(question, provider, model, yes):
 
 LOGO = """
 [bold cyan]
-   ▄████████  ▄████████    ▄████████ ████████▄     ▄████████ ███    █▄
-  ███    ███ ███    ███   ███    ███ ███   ▀███   ███    ███ ███    ███
-  ███    █▀  ███    █▀    ███    █▀  ███    ███   ███    █▀  ███    ███
-  ███        ███         ▄███▄▄▄     ███    ███  ▄███▄▄▄     ███    ███
-▀███████████ ███        ▀▀███▀▀▀     ███    ███ ▀▀███▀▀▀     ███    ███
-         ███ ███    █▄    ███    █▄  ███    ███   ███    █▄  ███    ███
-   ▄█    ███ ███    ███   ███    ███ ███   ▄███   ███    ███ ███    ███
- ▄████████▀  ████████▀    ██████████ ████████▀    ██████████ ████████▀
+  ▄████████ ████████▄     ▄████████ ████████▄     ▄████████ ████████▄ ████████▄
+ ███    ███ ███   ▀███   ███    ███ ███   ▀███   ███    ███ ███   ▀███ ███   ▀███
+ ███    █▀  ███    ███   ███    █▀  ███    ███   ███    █▀  ███    ███ ███    ███
+ ███        ███    ███  ▄███▄▄▄     ███    ███  ▄███▄▄▄     ███    ███ ███    ███
+███████████ ███    ███ ▀▀███▀▀▀     ███    ███ ▀▀███▀▀▀     ███    ███ ███    ███
+       ███ ███    ███   ███    █▄  ███    ███   ███    █▄  ███    ███ ███    ███
+ ▄█    ███ ███   ▄███   ███    ███ ███   ▄███   ███    ███ ███   ▄███ ███   ▄███
+▄████████▀  ████████▀    ██████████ ████████▀    ██████████ ████████▀  ████████▀
 [/bold cyan]
 """
 
@@ -245,16 +245,16 @@ def _exit_alt_screen():
 
 
 COMMON_MODELS = {
-    "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3-mini"],
-    "anthropic": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229"],
-    "google": ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"],
-    "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
-    "xai": ["grok-2-1212", "grok-beta"],
-    "deepseek": ["deepseek-chat", "deepseek-reasoner"],
-    "mistral": ["mistral-large-latest", "mistral-medium-latest", "open-mistral-nemo"],
-    "together": ["meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", "mistralai/Mixtral-8x22B-Instruct-v0.1"],
-    "nvidia": ["meta/llama-3.1-70b-instruct", "mistralai/mistral-7b-instruct-v0.3", "google/gemma-2-27b-it"],
-    "openrouter": ["anthropic/claude-3.5-sonnet", "openai/gpt-4o", "google/gemini-2.0-flash"],
+    "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "o3-mini", "o1-mini", "gpt-3.5-turbo"],
+    "anthropic": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307", "claude-3-5-haiku-20241022"],
+    "google": ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.5-flash-8b"],
+    "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama-3.2-90b-vision-preview", "mixtral-8x7b-32768", "gemma2-9b-it", "deepseek-r1-distill-llama-70b"],
+    "xai": ["grok-2-1212", "grok-beta", "grok-vision-beta"],
+    "deepseek": ["deepseek-chat", "deepseek-reasoner", "deepseek-coder"],
+    "mistral": ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "open-mistral-nemo", "codestral-latest"],
+    "together": ["meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", "mistralai/Mixtral-8x22B-Instruct-v0.1", "Qwen/Qwen2.5-72B-Instruct-Turbo", "deepseek-ai/DeepSeek-V3"],
+    "nvidia": ["meta/llama-3.1-70b-instruct", "meta/llama-3.1-8b-instruct", "mistralai/mistral-7b-instruct-v0.3", "google/gemma-2-27b-it", "nvidia/llama-3.1-nemotron-70b-instruct"],
+    "openrouter": ["anthropic/claude-3.5-sonnet", "openai/gpt-4o", "google/gemini-2.0-flash", "meta-llama/llama-3.1-70b-instruct", "deepseek/deepseek-chat", "mistralai/mistral-large"],
 }
 
 
@@ -330,8 +330,11 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
             _print_status_bar(agent, config)
             return
 
-        config.provider = p
         defaults = PROVIDER_DEFAULTS[p]
+        env_key = defaults["env_key"]
+
+        console.print(f"[yellow]Env: {env_key}[/yellow]")
+        config.provider = p
         config.model = defaults["model"]
 
         api = Prompt.ask(f"[yellow]API Key untuk {p}[/yellow]", password=True)
@@ -362,8 +365,21 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
             _print_status_bar(agent, config)
             return
 
-        config.provider = p
         defaults = PROVIDER_DEFAULTS[p]
+        env_key = defaults["env_key"]
+
+        import os
+        has_key = bool(config.api_key) or bool(os.getenv(env_key))
+
+        if not has_key:
+            console.print(f"[yellow]Provider {p} butuh API Key ({env_key})[/yellow]")
+            api = Prompt.ask(f"[yellow]API Key untuk {p}[/yellow]", password=True)
+            while not api:
+                print_warning("API Key wajib diisi")
+                api = Prompt.ask(f"[yellow]API Key untuk {p}[/yellow]", password=True)
+            config.api_key = api
+
+        config.provider = p
         config.model = defaults["model"]
 
         m = _pick_model(config)

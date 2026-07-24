@@ -232,8 +232,11 @@ def _print_status_bar(agent, config):
     cost = agent.cost_tracker
     rounds = cost.rounds
     total_cost = cost.total_cost
-    model_label = f"{config.provider}/{config.model}"
-    console.rule(f"[dim]{model_label}[/dim] [dim]│[/dim] [dim]${total_cost:.4f}[/dim] [dim]│[/dim] [dim]{rounds} putaran[/dim]", style="dim")
+    effort = config.effort.upper() if config.effort else "MEDIUM"
+    console.rule(
+        f"[bold]{config.provider}/{config.model}[/bold] [dim]│[/dim] [dim]effort: {effort}[/dim] [dim]│[/dim] [dim]${total_cost:.4f}[/dim] [dim]│[/dim] [dim]{rounds} putaran[/dim]",
+        style="cyan"
+    )
 
 
 def _enter_alt_screen():
@@ -315,7 +318,7 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
   [cyan]/tokens[/cyan]        Statistik konteks
   [cyan]/save[/cyan]          Simpan sesi ini
   [cyan]/sessions[/cyan]      Daftar sesi tersimpan
-  [cyan]/export[/cyan]        Export chat ke file .md
+  [cyan]/effort[/cyan]       Set effort: low/medium/high
   [cyan]/project-config[/cyan]  Config proyek (faresta.json)
   [cyan]exit/quit[/cyan]      Keluar""", title="Help", box=box.ROUNDED, border_style="cyan"))
 
@@ -410,6 +413,29 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
     elif command == "/cost":
         console.print(f"[cyan]biaya:[/cyan] {agent.cost_tracker.summary()}")
         _print_status_bar(agent, config)
+
+    elif command == "/effort":
+        choices = ["low", "medium", "high"]
+        table = Table(title="Pilih Effort Level", box=box.SIMPLE, header_style="cyan")
+        table.add_column("No", style="dim")
+        table.add_column("Level", style="yellow")
+        table.add_column("Deskripsi", style="green")
+        table.add_row("1", "low",    "Respon cepat, lebih murah")
+        table.add_row("2", "medium", "Seimbang (default)")
+        table.add_row("3", "high",   "Lebih teliti, berpikir lebih lama")
+        console.print(table)
+
+        choice = Prompt.ask("[yellow]Pilih effort[/yellow]", default=config.effort)
+        if choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(choices):
+                choice = choices[idx]
+        if choice in choices:
+            config.effort = choice
+            save_config(config)
+            _print_status_bar(agent, config)
+        else:
+            console.print("[red]Pilihan tidak valid. Pilih: low, medium, high[/red]")
 
     elif command == "/tokens":
         total_chars = sum(len(m.get("content", "")) for m in agent.messages)

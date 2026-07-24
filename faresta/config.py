@@ -26,6 +26,7 @@ class Config(BaseModel):
     api_key: str = ""
     temperature: float = 0.7
     max_tokens: int = 8192
+    effort: str = "medium"
     system_prompt: str = "Anda adalah Faresta Code, AI coding assistant yang membantu user di terminal. Anda bisa menjalankan perintah shell, membaca/menulis file, mencari kode, dan mengakses web. Selalu jelaskan apa yang Anda lakukan. Gunakan Bahasa Indonesia untuk menjawab."
     tool_confirm: bool = False
 

@@ -6,7 +6,7 @@ Dibuat oleh [Faresta](https://github.com/panelddos).
 
 ## Fitur
 
-- **Multi-provider LLM**: OpenAI (GPT-4o), Anthropic (Claude), Google (Gemini)
+- **Multi-provider LLM**: OpenAI (GPT-4o), Anthropic (Claude), Google (Gemini), Groq, xAI (Grok), NVIDIA, DeepSeek, Mistral, Together, OpenRouter
 - **Agentic mode**: AI menjalankan tools secara otomatis dengan error recovery
 - **Tools lengkap**: baca/tulis/edit file, bash, glob, grep, web fetch & search
 - **Git integration**: status, diff, commit, log, branch management

@@ -3,6 +3,7 @@ import json
 import click
 from pathlib import Path
 from datetime import datetime
+from rich.prompt import Prompt
 from .config import load_config, save_config, Config, HISTORY_DIR, PROVIDER_DEFAULTS
 from .project_config import ProjectConfig
 from .llm.base import LLMProvider
@@ -22,11 +23,9 @@ from .utils.display import (
 SESSION_DIR = HISTORY_DIR
 
 
-def get_provider(config: Config) -> LLMProvider:
+def get_provider(config: Config) -> LLMProvider | None:
     if not config.api_key:
-        env_hint = PROVIDER_DEFAULTS.get(config.provider, {}).get("env_key", "API_KEY")
-        print_error(f"No API key found for provider '{config.provider}'. Set {env_hint} environment variable.")
-        sys.exit(1)
+        return None
 
     providers = {
         "openai": OpenAIProvider,
@@ -134,9 +133,19 @@ def chat(provider, model, yes, resume):
     print_welcome()
     print_info(f"Provider: {config.provider} | Model: {config.model}")
     print_info(f"Tools: {len(agent.registry)} registered")
+    if not config.api_key:
+        print_warning("API key belum di-set! Ketik /login untuk setup")
     print_info("Type 'exit' or 'quit' to end")
-    print_info("Slash commands: /clear, /help, /cost, /tokens, /save, /sessions, /project-config")
+    print_info("Slash commands: /login, /model, /provider, /clear, /help, /cost, /tokens, /save, /sessions, /project-config")
     print()
+
+    def recreate_agent():
+        nonlocal llm, agent
+        llm = get_provider(config)
+        history = agent.messages if agent.messages and agent.messages[0].get("role") != "system" else []
+        agent = Agent(llm, config)
+        agent.add_system_prompt()
+        print_success(f"Provider aktif: {config.provider} / {config.model}")
 
     while True:
         user_input = input_user()
@@ -146,7 +155,7 @@ def chat(provider, model, yes, resume):
             break
 
         if user_input.strip().startswith("/"):
-            _handle_slash_command(agent, user_input.strip(), config)
+            _handle_slash_command(agent, user_input.strip(), config, recreate_agent)
             continue
 
         if not user_input.strip():
@@ -168,9 +177,10 @@ def chat(provider, model, yes, resume):
         print()
 
 
-def _handle_slash_command(agent, cmd: str, config: Config):
+def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
     parts = cmd.split()
     command = parts[0].lower()
+    args = parts[1:]
 
     if command == "/clear":
         agent.reset()
@@ -178,6 +188,9 @@ def _handle_slash_command(agent, cmd: str, config: Config):
 
     elif command == "/help":
         console.print("[bold cyan]Faresta Code Commands[/bold cyan]")
+        console.print("  [yellow]/login[/yellow]       Set API key, provider, and model interactively")
+        console.print("  [yellow]/provider[/yellow]    Switch provider (openai, anthropic, google, groq, xai, nvidia, deepseek, mistral, together, openrouter)")
+        console.print("  [yellow]/model[/yellow]       Change model (e.g. /model gpt-4o, /model claude-sonnet-4-20250514)")
         console.print("  [yellow]/clear[/yellow]       Reset conversation context")
         console.print("  [yellow]/cost[/yellow]        Show token usage and cost")
         console.print("  [yellow]/tokens[/yellow]      Show token count in current context")
@@ -185,6 +198,49 @@ def _handle_slash_command(agent, cmd: str, config: Config):
         console.print("  [yellow]/sessions[/yellow]    List saved sessions")
         console.print("  [yellow]/project-config[/yellow]  Show project config (faresta.json)")
         console.print("  [yellow]exit/quit[/yellow]    End session")
+
+    elif command == "/login":
+        provider_list = "openai, anthropic, google, groq, xai, nvidia, deepseek, mistral, together, openrouter"
+        p = Prompt.ask(f"[yellow]Pilih provider[/yellow]", default=config.provider)
+        if p in PROVIDER_DEFAULTS:
+            config.provider = p
+            api = Prompt.ask(f"[yellow]API Key untuk {p}[/yellow]", password=True)
+            if api:
+                config.api_key = api
+            save_config(config)
+            print_success(f"Provider: {p} | API Key: {'✓ tersimpan' if api else '(pakai env var yang sudah ada)'}")
+            if recreate_agent:
+                recreate_agent()
+            print_info(f"Sekarang pakai: {config.provider} / {config.model}")
+        else:
+            print_error(f"Provider '{p}' tidak dikenal. Pilih: {provider_list}")
+
+    elif command == "/provider":
+        provider_list = "openai, anthropic, google, groq, xai, nvidia, deepseek, mistral, together, openrouter"
+        p = Prompt.ask(f"[yellow]Ganti provider[/yellow]", default=config.provider)
+        if p in PROVIDER_DEFAULTS:
+            config.provider = p
+            defaults = PROVIDER_DEFAULTS[p]
+            config.model = defaults["model"]
+            save_config(config)
+            print_success(f"Provider diganti ke: {p} / {config.model}")
+            if recreate_agent:
+                recreate_agent()
+        else:
+            print_error(f"Provider '{p}' tidak dikenal. Pilih: {provider_list}")
+
+    elif command == "/model":
+        defaults = PROVIDER_DEFAULTS.get(config.provider, {})
+        if args:
+            model = args[0]
+        else:
+            model = Prompt.ask(f"[yellow]Nama model untuk {config.provider}[/yellow]", default=defaults.get("model", ""))
+        if model:
+            config.model = model
+            save_config(config)
+            print_success(f"Model diganti ke: {model}")
+            if recreate_agent:
+                recreate_agent()
 
     elif command == "/cost":
         print_info(agent.cost_tracker.summary())
@@ -224,7 +280,7 @@ def _handle_slash_command(agent, cmd: str, config: Config):
         console.print(f"  Test command:     {proj.test_command or '(auto-detect)'}")
 
     else:
-        print_error(f"Unknown command: {command}")
+        print_error(f"Unknown command: {command}. Type /help for commands.")
 
 
 def _save_session(agent):

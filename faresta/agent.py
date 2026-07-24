@@ -57,6 +57,8 @@ class Agent:
         self.messages.append({"role": "system", "content": system})
 
     def run(self, user_input: str) -> str:
+        if self.llm is None:
+            return "API key belum di-set. Ketik /login untuk setup provider dan API key."
         self.messages.append({"role": "user", "content": user_input})
         final_response = ""
         tool_round = 0

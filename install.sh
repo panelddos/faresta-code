@@ -66,10 +66,9 @@ printf "\n"
 
 # Create wrapper script
 WRAPPER="$BIN_DIR/faresta"
-cat > "$WRAPPER" << 'WRAPPEREOF'
+cat > "$WRAPPER" << WRAPPEREOF
 #!/usr/bin/env bash
-export FARESTA_DIR="$(cd "$(dirname "$(dirname "$(readlink -f "$0")")")" && pwd)"
-exec "$FARESTA_DIR/venv/bin/faresta" "$@"
+exec "$INSTALL_DIR/venv/bin/faresta" "\$@"
 WRAPPEREOF
 chmod +x "$WRAPPER"
 

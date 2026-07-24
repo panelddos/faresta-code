@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "faresta-code"
-version = "0.3.0"
-description = "AI CLI Assistant — Agentic coding assistant with multi-provider LLM, tool calling, social media integration, and interactive terminal"
+version = "0.4.0"
+description = "AI CLI Assistant — Agentic coding assistant with multi-provider LLM, tool calling, git integration, social media, and interactive terminal"
 readme = "README.md"
 authors = [{ name = "Faresta" }]
 license = { text = "MIT" }

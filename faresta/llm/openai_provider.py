@@ -59,4 +59,9 @@ class OpenAIProvider(LLMProvider):
                 {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
                 for tc in msg.tool_calls
             ]
+        if hasattr(response, 'usage') and response.usage:
+            result["usage"] = {
+                "input_tokens": response.usage.prompt_tokens,
+                "output_tokens": response.usage.completion_tokens,
+            }
         return result

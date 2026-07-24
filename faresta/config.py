@@ -14,7 +14,7 @@ class Config(BaseModel):
     temperature: float = 0.7
     max_tokens: int = 8192
     system_prompt: str = "Anda adalah Faresta Code, AI coding assistant yang membantu user di terminal. Anda bisa menjalankan perintah shell, membaca/menulis file, mencari kode, dan mengakses web. Selalu jelaskan apa yang Anda lakukan. Gunakan Bahasa Indonesia untuk menjawab."
-    tool_confirm: bool = True
+    tool_confirm: bool = False
 
     def model_post_init(self, __context):
         if not self.model:

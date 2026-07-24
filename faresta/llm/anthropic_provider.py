@@ -92,4 +92,9 @@ class AnthropicProvider(LLMProvider):
         result = {"role": "assistant", "content": content}
         if tool_calls:
             result["tool_calls"] = tool_calls
+        if hasattr(response, 'usage') and response.usage:
+            result["usage"] = {
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
+            }
         return result

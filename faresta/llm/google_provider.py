@@ -106,4 +106,9 @@ class GoogleProvider(LLMProvider):
         result = {"role": "assistant", "content": content}
         if tool_calls:
             result["tool_calls"] = tool_calls
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            result["usage"] = {
+                "input_tokens": response.usage_metadata.prompt_token_count,
+                "output_tokens": response.usage_metadata.candidates_token_count,
+            }
         return result

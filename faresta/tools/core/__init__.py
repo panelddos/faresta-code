@@ -5,6 +5,8 @@ from .web import WebFetchTool, WebSearchTool
 from .git_tools import GitStatusTool, GitDiffTool, GitCommitTool, GitLogTool, GitBranchTool
 from .lint_tools import LintTestTool
 from .project import ProjectIndexTool
+from .subagent import SubAgentTool
+from .image import ReadImageTool
 
 
 def register_core_tools():
@@ -16,5 +18,7 @@ def register_core_tools():
         GitStatusTool(), GitDiffTool(), GitCommitTool(), GitLogTool(), GitBranchTool(),
         LintTestTool(),
         ProjectIndexTool(),
+        SubAgentTool(),
+        ReadImageTool(),
     ]:
         register_tool(tool)

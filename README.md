@@ -1,52 +1,48 @@
 # Faresta Code
 
-**AI CLI Assistant** — Agentic coding assistant dengan multi-provider LLM, tool calling, git integration, social media, dan interactive terminal.
+**AI CLI Assistant** — Agentic coding assistant with multi-provider LLM, tool calling, git integration, social media, and interactive terminal.
 
 Dibuat oleh [Faresta](https://github.com/panelddos).
 
-## Fitur
-
-- **Multi-provider LLM**: OpenAI (GPT-4o), Anthropic (Claude), Google (Gemini), Groq, xAI (Grok), NVIDIA, DeepSeek, Mistral, Together, OpenRouter
-- **Agentic mode**: AI menjalankan tools secara otomatis dengan error recovery
-- **Tools lengkap**: baca/tulis/edit file, bash, glob, grep, web fetch & search
-- **Git integration**: status, diff, commit, log, branch management
-- **Lint/Test auto-detection**: deteksi & jalankan pytest, ruff, eslint, npm test, dll
-- **Permission system**: kontrol tool mana yang boleh dijalankan per proyek
-- **Project config**: `faresta.json` untuk setting per proyek
-- **Cost tracking**: pantau token usage dan biaya per sesi
-- **Session persistence**: simpan/resume sesi chat
-- **Social media**: Twitter/X, Telegram, Discord
-- **Streaming response**: real-time output
-- **Interactive chat** dengan slash commands
-
 ## Instalasi
 
-### Cara 1: One-liner via curl (Recommended)
+### Linux / macOS (curl | sh)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/panelddos/faresta-code/main/install.sh | sh
 ```
 
-Installasi otomatis:
-- Clone repo ke `~/.faresta/`
-- Buat Python virtual environment
-- Install dependencies
-- Buat wrapper script di `~/.local/bin/faresta`
+Untuk mengatur direktori instalasi:
+```bash
+curl -fsSL https://raw.githubusercontent.com/panelddos/faresta-code/main/install.sh | FARESTA_DIR=~/.faresta sh
+```
 
-Setelah selesai, pastikan `~/.local/bin` ada di PATH kamu:
+Setelah selesai, pastikan `~/.local/bin` ada di PATH:
 ```bash
 export PATH="$PATH:$HOME/.local/bin"
-echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc  # atau ~/.zshrc
+echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-### Cara 2: Langsung dari GitHub
+### Windows PowerShell
 
-```bash
-pip install git+https://github.com/panelddos/faresta-code.git
+```powershell
+iwr -Uri "https://raw.githubusercontent.com/panelddos/faresta-code/main/install.ps1" -OutFile "$env:TEMP\install_faresta.ps1"
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\install_faresta.ps1"
 ```
 
-### Cara 3: Dari source
+Atau satu baris:
+```powershell
+& ([scriptblock]::Create((Invoke-WebRequest -Uri "https://raw.githubusercontent.com/panelddos/faresta-code/main/install.ps1").Content))
+```
+
+### macOS (Homebrew)
+
+```bash
+# Coming soon: brew install faresta-code/tap/faresta
+```
+
+### Dari Source
 
 ```bash
 git clone https://github.com/panelddos/faresta-code.git
@@ -54,97 +50,59 @@ cd faresta-code
 pip install -e .
 ```
 
-### Cara 4: Dari PyPI (coming soon)
+## Quick Start
+
+Set API key lalu jalankan:
 
 ```bash
-pip install faresta-code
-```
-
-## Konfigurasi
-
-### LLM API Keys
-
-Set minimal satu API key via environment variable:
-
-```bash
-# OpenAI (default)
 export OPENAI_API_KEY=sk-...
-
-# Anthropic
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Google
-export GOOGLE_API_KEY=...
+faresta chat
 ```
 
-Atau simpan via CLI (config akan disimpan di `~/.config/faresta/config.yml`):
-
+Atau set via CLI:
 ```bash
 faresta config-set --api-key sk-... --provider openai --model gpt-4o
 ```
 
-### Project Config (faresta.json)
-
-Buat file `faresta.json` di root proyek kamu untuk konfigurasi per-proyek:
-
+Faresta Code mendukung banyak provider:
 ```bash
-# Init dengan default
-faresta project init
+export ANTHROPIC_API_KEY=sk-ant-...
+faresta chat --provider anthropic
 
-# Set default provider
-faresta project init anthropic
-
-# Izinkan tool tanpa konfirmasi
-faresta project allow bash
-faresta project allow write
-
-# Tolak tool tertentu
-faresta project deny web_search
+export GOOGLE_API_KEY=...
+faresta chat --provider google
 ```
 
-Contoh `faresta.json`:
-```json
-{
-  "permissions": {
-    "allow": ["bash", "write", "read", "edit"],
-    "deny": ["web_search"],
-    "ask": ["git_commit", "bash"]
-  },
-  "default_provider": "anthropic",
-  "default_model": "claude-sonnet-4-20250514"
-}
-```
+## Fitur
 
-### Social Media API Keys
-
-```bash
-# Twitter/X
-export TWITTER_BEARER_TOKEN=...
-export TWITTER_API_KEY=...
-export TWITTER_API_SECRET=...
-export TWITTER_ACCESS_TOKEN=...
-export TWITTER_ACCESS_SECRET=...
-
-# Telegram
-export TELEGRAM_BOT_TOKEN=...
-
-# Discord
-export DISCORD_WEBHOOK_URL=...
-```
+- **Multi-provider LLM**: OpenAI (GPT-4o, o3-mini), Anthropic (Claude), Google (Gemini), Groq, xAI (Grok), NVIDIA, DeepSeek, Mistral, Together, OpenRouter
+- **Agentic mode**: AI menjalankan tools secara otomatis dengan error recovery
+- **Project-aware**: AI scan struktur proyek (tree, dependencies, README) via `project_index`
+- **Auto-verification**: Setiap edit/write otomatis di-lint untuk deteksi error
+- **Effort system**: Kontrol seberapa dalam AI berpikir (low/medium/high)
+- **Tools lengkap**: baca/tulis/edit file, bash, glob, grep, web fetch & search, sub-agent
+- **Git integration**: status, diff, commit, log, branch management
+- **Lint/Test auto-detection**: deteksi & jalankan pytest, ruff, eslint, npm test, dll
+- **Session persistence**: simpan/resume sesi chat
+- **Cost tracking**: pantau token usage dan biaya per sesi
+- **Social media**: Twitter/X, Telegram, Discord
+- **Terminal UI**: full-screen alternate buffer, status bar, thinking spinner
+- **Streaming response**: real-time output
 
 ## Penggunaan
 
-### Interactive agentic chat
+### Interactive chat
 
 ```bash
 faresta chat
 ```
 
-### Chat dengan provider berbeda
+### Dengan provider berbeda
 
 ```bash
 faresta chat --provider anthropic --model claude-sonnet-4-20250514
 faresta chat --provider google --model gemini-2.5-flash
+faresta chat --provider groq --model llama-3.3-70b-versatile
 ```
 
 ### Single question
@@ -161,6 +119,14 @@ faresta ask "Cari semua file .py" -y
 faresta chat -y
 ```
 
+### Effort level
+
+```bash
+faresta config-set --effort high
+```
+
+Atau di dalam chat: `/effort`
+
 ### Resume session sebelumnya
 
 ```bash
@@ -171,19 +137,38 @@ faresta session
 faresta chat --resume 1721800000
 ```
 
-## Slash Commands
-
-Di dalam mode `chat`, tersedia perintah berikut:
+## Slash Commands (Interactive Chat)
 
 | Command | Deskripsi |
 |---------|-----------|
-| `/clear` | Reset conversation context |
 | `/help` | Tampilkan daftar commands |
-| `/cost` | Tampilkan token usage dan biaya |
-| `/tokens` | Tampilkan statistik context saat ini |
-| `/save` | Simpan session saat ini |
-| `/sessions` | List semua session tersimpan |
-| `/project-config` | Tampilkan config proyek |
+| `/login` | Set API key + pilih provider & model |
+| `/provider` | Ganti provider AI |
+| `/model` | Ganti model AI |
+| `/effort` | Set effort: low/medium/high |
+| `/clear` | Reset percakapan |
+| `/cost` | Lihat token usage & biaya |
+| `/tokens` | Statistik konteks |
+| `/save` | Simpan sesi ini |
+| `/sessions` | Daftar/resume/delete sesi tersimpan |
+| `/allow` | Izinkan tool tanpa konfirmasi (per proyek) |
+| `/deny` | Tolak tool (per proyek) |
+| `/project` | Lihat/config project faresta.json |
+| `/export` | Export chat ke file .md |
+| `exit/quit` | Keluar |
+
+## CLI Commands
+
+| Command | Deskripsi |
+|---------|-----------|
+| `faresta chat` | Interactive agentic chat |
+| `faresta ask "..."` | Single question |
+| `faresta config-show` | Lihat config |
+| `faresta config-set --key val` | Set config value |
+| `faresta project init` | Buat faresta.json |
+| `faresta project allow <tool>` | Izinkan tool |
+| `faresta project deny <tool>` | Tolak tool |
+| `faresta session` | List sessions |
 
 ## Tools yang Tersedia
 
@@ -197,6 +182,9 @@ Di dalam mode `chat`, tersedia perintah berikut:
 - **bash** — Jalankan perintah shell
 - **web_fetch** — Ambil konten dari URL
 - **web_search** — Cari informasi di web
+- **project_index** — Scan struktur proyek (tree, README, deps)
+- **read_image** — Baca & analisis gambar/screenshot
+- **subagent** — Delegasikan tugas kompleks ke sub-agent
 
 ### Git Tools
 - **git_status** — Lihat status repository
@@ -213,18 +201,84 @@ Di dalam mode `chat`, tersedia perintah berikut:
 - **telegram** — Kirim pesan via bot
 - **discord** — Kirim pesan via webhook
 
-## Uninstall
+## Konfigurasi
+
+### API Keys via Environment
 
 ```bash
-# Hapus installasi curl-based
+# OpenAI (default)
+export OPENAI_API_KEY=sk-...
+
+# Anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Google
+export GOOGLE_API_KEY=...
+
+# Groq
+export GROQ_API_KEY=gsk_...
+
+# xAI (Grok)
+export XAI_API_KEY=...
+
+# NVIDIA
+export NVIDIA_API_KEY=...
+
+# DeepSeek
+export DEEPSEEK_API_KEY=...
+
+# Mistral
+export MISTRAL_API_KEY=...
+
+# Together AI
+export TOGETHER_API_KEY=...
+
+# OpenRouter
+export OPENROUTER_API_KEY=...
+```
+
+### Project Config (faresta.json)
+
+Buat file `faresta.json` di root proyek:
+
+```bash
+faresta project init
+faresta project allow bash
+faresta project deny web_search
+```
+
+Contoh `faresta.json`:
+```json
+{
+  "permissions": {
+    "allow": ["bash", "write", "read", "edit"],
+    "deny": ["web_search"],
+    "ask": ["git_commit"]
+  },
+  "default_provider": "anthropic",
+  "default_model": "claude-sonnet-4-20250514"
+}
+```
+
+## Uninstall
+
+**Linux / macOS:**
+```bash
 rm -rf ~/.faresta
 rm -f ~/.local/bin/faresta
-
-# Atau via pip
-pip uninstall faresta-code
-
-# Hapus config
 rm -rf ~/.config/faresta
+```
+
+**Windows PowerShell:**
+```powershell
+Remove-Item -Recurse -Force "$env:USERPROFILE\.faresta"
+Remove-Item -Force "$env:USERPROFILE\.local\bin\faresta.exe"
+Remove-Item -Recurse -Force "$env:USERPROFILE\.config\faresta"
+```
+
+**Via pip:**
+```bash
+pip uninstall faresta-code -y
 ```
 
 ## Development

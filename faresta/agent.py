@@ -63,6 +63,8 @@ class Agent:
         self.messages.append({"role": "user", "content": user_input})
         final_response = ""
         tool_round = 0
+        retry_counts: dict[str, int] = {}
+        max_retries_per_tool = 3
 
         while tool_round < self.max_tool_rounds:
             tool_round += 1
@@ -132,7 +134,17 @@ class Agent:
                             result += f"\n\n[auto-lint]\n{lint_result}"
 
                     if "Error" in result[:10] and tool_round < self.max_tool_rounds:
-                        print_warning(f"  Tool '{name}' returned error, will retry with explanation")
+                        retry_counts[name] = retry_counts.get(name, 0) + 1
+                        if retry_counts[name] > max_retries_per_tool:
+                            print_warning(f"  Tool '{name}' gagal setelah {max_retries_per_tool}x percobaan, berhenti")
+                            tool_results.append({
+                                "role": "tool",
+                                "tool_call_id": tc.get("id", ""),
+                                "tool_name": name,
+                                "content": result[:2000] if len(result) > 2000 else result,
+                            })
+                            continue
+                        print_warning(f"  Tool '{name}' returned error (attempt {retry_counts[name]}/{max_retries_per_tool}), will retry with explanation")
                         self.messages.append(assistant_msg)
                         self.messages.append({
                             "role": "tool",

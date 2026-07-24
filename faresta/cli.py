@@ -142,8 +142,14 @@ def chat(provider, model, yes, resume):
         else:
             print_error(f"Session '{resume}' not found")
             agent.add_system_prompt()
+            _inject_project_context(agent)
     else:
         agent.add_system_prompt()
+        _inject_project_context(agent)
+
+    _enter_alt_screen()
+    _print_welcome(config)
+    _repl(agent, config, llm)
 
     _enter_alt_screen()
     _print_welcome(config)
@@ -161,6 +167,23 @@ def _print_welcome(config):
     if not config.api_key:
         console.print("  [yellow]⚠ API key belum di-set — ketik /login[/yellow]")
         console.print("")
+
+
+def _inject_project_context(agent):
+    try:
+        from .tools.core.project import ProjectIndexTool
+        tool = ProjectIndexTool()
+        context = tool.execute(depth=2)
+        agent.messages.append({
+            "role": "user",
+            "content": f"[Project context]\n{context}\n\nGunakan informasi ini untuk memahami struktur proyek. Jangan sebutkan bahwa kamu menjalankan project_index.",
+        })
+        agent.messages.append({
+            "role": "assistant",
+            "content": "Saya sudah membaca konteks proyek ini. Siap membantu.",
+        })
+    except Exception:
+        pass
 
 
 def _repl(agent, config, llm):
@@ -312,13 +335,16 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
   [cyan]/login[/cyan]         Set API key + pilih provider & model
   [cyan]/provider[/cyan]      Ganti provider AI
   [cyan]/model[/cyan]         Ganti model AI
+  [cyan]/effort[/cyan]        Set effort: low/medium/high
   [cyan]/clear[/cyan]         Reset percakapan
   [cyan]/cost[/cyan]          Lihat pemakaian token & biaya
   [cyan]/tokens[/cyan]        Statistik konteks
   [cyan]/save[/cyan]          Simpan sesi ini
-  [cyan]/sessions[/cyan]      Daftar sesi tersimpan
-  [cyan]/effort[/cyan]       Set effort: low/medium/high
-  [cyan]/project-config[/cyan]  Config proyek (faresta.json)
+  [cyan]/sessions[/cyan]      Daftar/resume/delete sesi
+  [cyan]/allow[/cyan]         Izinkan tool tanpa konfirmasi (proyek ini)
+  [cyan]/deny[/cyan]          Tolak tool (proyek ini)
+  [cyan]/project[/cyan]       Lihat config proyek
+  [cyan]/export[/cyan]        Export chat ke file .md
   [cyan]exit/quit[/cyan]      Keluar""", title="Help", box=box.ROUNDED, border_style="cyan"))
 
     elif command == "/login":
@@ -456,20 +482,36 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
             _print_status_bar(agent, config)
             return
         table = Table(title="Sesi Tersimpan", box=box.SIMPLE, header_style="cyan")
+        table.add_column("No", style="dim")
         table.add_column("ID", style="dim")
         table.add_column("Tanggal", style="yellow")
         table.add_column("Pesan")
         table.add_column("Biaya")
-        for s in sessions:
+        for i, s in enumerate(sessions, 1):
             try:
                 data = json.loads(s.read_text())
                 msgs = len(data.get("messages", []))
                 date = datetime.fromtimestamp(int(s.stem)).strftime("%Y-%m-%d %H:%M")
                 cost = f"${data.get('total_cost', 0):.4f}"
-                table.add_row(s.stem, date, str(msgs), cost)
+                table.add_row(str(i), s.stem, date, str(msgs), cost)
             except Exception:
                 pass
         console.print(table)
+        console.print("[dim]Resume: faresta chat --resume <id>  |  Hapus: /delete <id>[/dim]")
+        _print_status_bar(agent, config)
+
+    elif command == "/delete":
+        if len(parts) < 2:
+            print_warning("Gunakan: /delete <session_id>")
+            _print_status_bar(agent, config)
+            return
+        session_id = parts[1]
+        session_file = SESSION_DIR / f"{session_id}.json"
+        if session_file.exists():
+            session_file.unlink()
+            console.print(f"[green]✓ Session {session_id} dihapus[/green]")
+        else:
+            print_error(f"Session '{session_id}' tidak ditemukan")
         _print_status_bar(agent, config)
 
     elif command == "/export":
@@ -477,14 +519,46 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
         _export_chat(agent, config, path)
         _print_status_bar(agent, config)
 
-    elif command == "/project-config":
+    elif command in ("/project", "/project-config"):
         proj = agent.project_config
         console.print(Panel(f"""[bold]Project Config (faresta.json)[/bold]
 
   Provider:    {proj.default_provider or '(not set)'}
   Model:       {proj.default_model or '(not set)'}
-  Allow:       {proj.permissions.allow or '-'}
-  Deny:        {proj.permissions.deny or '-'}""", box=box.ROUNDED, border_style="cyan"))
+  Allow:       {', '.join(proj.permissions.allow) if proj.permissions.allow else '-'}
+  Deny:        {', '.join(proj.permissions.deny) if proj.permissions.deny else '-'}""", box=box.ROUNDED, border_style="cyan"))
+        _print_status_bar(agent, config)
+
+    elif command == "/allow":
+        if len(parts) < 2:
+            print_warning("Gunakan: /allow <tool_name>")
+            _print_status_bar(agent, config)
+            return
+        tool_name = parts[1]
+        proj = agent.project_config
+        if tool_name in proj.permissions.deny:
+            proj.permissions.deny.remove(tool_name)
+        if tool_name not in proj.permissions.allow:
+            proj.permissions.allow.append(tool_name)
+        proj.save()
+        agent.project_config = proj
+        console.print(f"[green]✓ Tool '{tool_name}' diizinkan tanpa konfirmasi[/green]")
+        _print_status_bar(agent, config)
+
+    elif command == "/deny":
+        if len(parts) < 2:
+            print_warning("Gunakan: /deny <tool_name>")
+            _print_status_bar(agent, config)
+            return
+        tool_name = parts[1]
+        proj = agent.project_config
+        if tool_name in proj.permissions.allow:
+            proj.permissions.allow.remove(tool_name)
+        if tool_name not in proj.permissions.deny:
+            proj.permissions.deny.append(tool_name)
+        proj.save()
+        agent.project_config = proj
+        console.print(f"[green]✓ Tool '{tool_name}' ditolak[/green]")
         _print_status_bar(agent, config)
 
     else:
@@ -505,7 +579,7 @@ def _export_chat(agent, config, path):
             lines.append(f"## Faresta\n\n{content}\n")
     with open(path, "w") as f:
         f.write("\n".join(lines))
-    _render_msg(f"[green]✓ Chat diexport ke {path}[/green]")
+    print_success(f"Chat diexport ke {path}")
 
 
 def _save_session(agent):
@@ -534,6 +608,7 @@ def config_show():
     console.print(f"  Model:        {config.model}")
     console.print(f"  Temperature:  {config.temperature}")
     console.print(f"  Max Tokens:   {config.max_tokens}")
+    console.print(f"  Effort:       {config.effort}")
     console.print(f"  Tool Confirm: {config.tool_confirm}")
     console.print(f"  API Key:      {'[green]✓ Set[/green]' if config.api_key else '[red]✖ Not set[/red]'}")
 
@@ -551,7 +626,8 @@ def config_show():
 @click.option("--max-tokens", type=int, help="Max tokens")
 @click.option("--system-prompt", help="System prompt")
 @click.option("--tool-confirm/--no-tool-confirm", help="Enable/disable tool confirmation")
-def config_set(provider, model, api_key, temperature, max_tokens, system_prompt, tool_confirm):
+@click.option("--effort", type=click.Choice(["low", "medium", "high"]), help="Effort level")
+def config_set(provider, model, api_key, temperature, max_tokens, system_prompt, tool_confirm, effort):
     """Set configuration values."""
     config = load_config()
     if provider:
@@ -568,6 +644,8 @@ def config_set(provider, model, api_key, temperature, max_tokens, system_prompt,
         config.system_prompt = system_prompt
     if tool_confirm is not None:
         config.tool_confirm = tool_confirm
+    if effort:
+        config.effort = effort
 
     save_config(config)
     print_success("Configuration saved")

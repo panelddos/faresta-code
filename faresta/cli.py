@@ -7,6 +7,7 @@ from .llm.anthropic_provider import AnthropicProvider
 from .llm.google_provider import GoogleProvider
 from .agent import Agent
 from .tools.core import register_core_tools
+from .tools.social import register_social_tools
 from .utils.display import (
     console, print_welcome, print_markdown, print_error,
     print_info, print_success, input_user,
@@ -37,9 +38,10 @@ def get_provider(config: Config) -> LLMProvider:
 
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="faresta")
+@click.version_option(version="0.3.0", prog_name="faresta")
 def main():
     register_core_tools()
+    register_social_tools()
 
 
 @main.command()

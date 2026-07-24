@@ -236,6 +236,14 @@ def _print_status_bar(agent, config):
     console.rule(f"[dim]{model_label}[/dim] [dim]│[/dim] [dim]${total_cost:.4f}[/dim] [dim]│[/dim] [dim]{rounds} putaran[/dim]", style="dim")
 
 
+def _enter_alt_screen():
+    print("\033[?1049h\033[2J\033[H", end="", flush=True)
+
+
+def _exit_alt_screen():
+    print("\033[?1049l", end="", flush=True)
+
+
 COMMON_MODELS = {
     "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3-mini"],
     "anthropic": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229"],

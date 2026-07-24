@@ -134,20 +134,27 @@ def chat(provider, model, yes, resume):
 
     _enter_alt_screen()
     _render_header(config)
+    _render_no_key_warning(config)
+    _fill_to_bottom()
+    _repl(agent, config, llm)
 
-    if not config.api_key:
-        _render_msg("[yellow]⚠ API key belum di-set — ketik /login[/yellow]")
-    console.print("")
 
+def _repl(agent, config, llm):
     def recreate_agent():
-        nonlocal llm, agent
+        nonlocal llm
         llm = get_provider(config)
-        agent = Agent(llm, config)
+        agent.llm = llm
+        agent.messages = []
         agent.add_system_prompt()
-        _render_header(config)
 
     while True:
-        user_input = Prompt.ask("[bold]>[/bold]")
+        try:
+            user_input = Prompt.ask("[bold]>[/bold]")
+        except (EOFError, KeyboardInterrupt):
+            _save_session(agent)
+            _exit_alt_screen()
+            console.print("[dim]bye[/dim]")
+            break
 
         if user_input.lower() in ("exit", "quit"):
             _save_session(agent)
@@ -157,25 +164,73 @@ def chat(provider, model, yes, resume):
 
         if user_input.strip().startswith("/"):
             _handle_slash_command(agent, user_input.strip(), config, recreate_agent)
+            _fill_to_bottom()
             continue
 
         if not user_input.strip():
             continue
 
-        with console.status("[bold cyan]          thinking...[/bold cyan]", spinner="dots"):
+        with console.status("[bold cyan]  thinking...[/bold cyan]", spinner="dots"):
             try:
                 response = agent.run(user_input)
             except Exception as e:
-                print_error(str(e))
+                _render_chat(agent, config)
+                _render_msg(f"[red]Error: {e}[/red]")
+                _fill_to_bottom()
                 continue
 
-        if response:
-            _render_msg(f"[bold]you:[/bold] {user_input}")
-            print_markdown(response)
+        _render_chat(agent, config)
+        _fill_to_bottom()
 
-        tool_count = len([m for m in agent.messages if m["role"] == "tool"])
-        if tool_count:
-            _render_msg(f"[dim]— used {tool_count} tool(s)[/dim]")
+
+def _render_chat(agent, config):
+    _render_header(config)
+    _render_no_key_warning(config)
+
+    for msg in agent.messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        tool_calls = msg.get("tool_calls", [])
+
+        if role == "user" and content:
+            console.print(f"[bold]You:[/bold] {content}")
+            console.print("")
+        elif role == "assistant":
+            if content:
+                console.print(f"[cyan]Faresta:[/cyan]")
+                print_markdown(content)
+                console.print("")
+            if tool_calls:
+                for tc in tool_calls:
+                    fn = tc.get("function", {})
+                    fn_name = fn.get("name", "?")
+                    console.print(f"[dim]  └ using {fn_name}[/dim]")
+                console.print("")
+        elif role == "tool":
+            tc_id = msg.get("tool_call_id", "")
+            fn_name = msg.get("tool_name", "?")
+            res = msg.get("content", "")
+            short = res[:120].replace("\n", " ") + ("..." if len(res) > 120 else "")
+            console.print(f"[dim]  └ {fn_name} → {short}[/dim]")
+
+    if not agent.messages or all(m["role"] == "system" for m in agent.messages):
+        console.print("[dim]Ketik pesan atau /help untuk bantuan[/dim]")
+        console.print("")
+
+
+def _render_no_key_warning(config):
+    if not config.api_key:
+        _render_msg("[yellow]⚠ API key belum di-set — ketik /login[/yellow]")
+
+
+def _fill_to_bottom():
+    import shutil
+    try:
+        h = shutil.get_terminal_size().lines
+        for _ in range(max(0, h - 6)):
+            console.print("")
+    except Exception:
+        pass
 
 
 def _enter_alt_screen():
@@ -187,12 +242,9 @@ def _exit_alt_screen():
 
 
 def _render_header(config):
-    status = "✓" if config.api_key else "✗"
+    status = "\033[32m✓\033[0m" if config.api_key else "\033[33m✗\033[0m"
     print("\033[H\033[2J", end="", flush=True)
-    console.print(Panel(
-        f"[bold cyan]Faresta Code[/bold cyan]   [dim]{config.provider}/{config.model}[/dim] [green]{status}[/green]",
-        box=box.MINIMAL, border_style="cyan"
-    ))
+    console.rule(f"[bold cyan]Faresta Code[/bold cyan] [dim]{config.provider}/{config.model}[/dim] {status}", style="cyan")
 
 
 def _render_msg(msg):
@@ -256,15 +308,13 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
 
     if command == "/clear":
         agent.reset()
-        _render_header(config)
-        if not config.api_key:
-            _render_msg("[yellow]⚠ API key belum di-set[/yellow]")
-        console.print("")
+        _render_chat(agent, config)
+        _render_msg("[dim]Percakapan direset[/dim]")
 
     elif command == "/help":
         console.print(Panel("""[bold]Slash Commands[/bold]
 
-  [cyan]/login[/cyan]         Set API key + pilih provider
+  [cyan]/login[/cyan]         Set API key + pilih provider & model
   [cyan]/provider[/cyan]      Ganti provider AI
   [cyan]/model[/cyan]         Ganti model AI
   [cyan]/clear[/cyan]         Reset percakapan
@@ -272,6 +322,7 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
   [cyan]/tokens[/cyan]        Statistik konteks
   [cyan]/save[/cyan]          Simpan sesi ini
   [cyan]/sessions[/cyan]      Daftar sesi tersimpan
+  [cyan]/export[/cyan]        Export chat ke file .md
   [cyan]/project-config[/cyan]  Config proyek (faresta.json)
   [cyan]exit/quit[/cyan]      Keluar""", title="Help", box=box.ROUNDED, border_style="cyan"))
 
@@ -300,16 +351,19 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
         m = _pick_model(config)
         if m:
             config.model = m
-
         save_config(config)
-        _render_header(config)
+
         if recreate_agent:
             recreate_agent()
+        _render_chat(agent, config)
         _render_msg(f"[green]✓ Login berhasil — {config.provider}/{config.model}[/green]")
-        console.print("")
 
     elif command == "/provider":
-        p = _pick_provider(config, "Ganti Provider")
+        _render_header(config)
+        console.print(Panel("[bold cyan]Ganti Provider[/bold cyan]", box=box.MINIMAL, border_style="cyan"))
+        console.print("")
+
+        p = _pick_provider(config, "Pilih Provider")
         if not p:
             print_error("Provider tidak valid")
             return
@@ -321,44 +375,47 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
         m = _pick_model(config)
         if m:
             config.model = m
-
         save_config(config)
+
         if recreate_agent:
             recreate_agent()
-        else:
-            _render_header(config)
+        _render_chat(agent, config)
         _render_msg(f"[green]✓ Provider: {config.provider}[/green]")
-        console.print("")
 
     elif command == "/model":
+        _render_header(config)
+        console.print(Panel(f"[bold cyan]Ganti Model — {config.provider}[/bold cyan]", box=box.MINIMAL, border_style="cyan"))
+        console.print("")
+
         m = _pick_model(config)
         if m:
             config.model = m
             save_config(config)
             if recreate_agent:
                 recreate_agent()
+            _render_chat(agent, config)
             _render_msg(f"[green]✓ Model: {config.model}[/green]")
         else:
             print_error("Model tidak valid")
 
     elif command == "/cost":
-        print_info(agent.cost_tracker.summary())
+        _render_msg(f"[cyan]biaya:[/cyan] {agent.cost_tracker.summary()}")
 
     elif command == "/tokens":
         total_chars = sum(len(m.get("content", "")) for m in agent.messages)
         tool_count = len([m for m in agent.messages if m["role"] == "tool"])
         msg_count = len(agent.messages)
-        console.print(f"[cyan]context:[/cyan] {msg_count} pesan, ~{total_chars} chars, {tool_count} tool calls, {agent.cost_tracker.rounds} putaran")
+        _render_msg(f"[cyan]context:[/cyan] {msg_count} pesan, ~{total_chars} chars, {tool_count} tool calls, {agent.cost_tracker.rounds} putaran")
 
     elif command == "/save":
         _save_session(agent)
-        print_success(f"Sesi tersimpan: {agent.session_id}")
+        _render_msg(f"[green]✓ Sesi tersimpan: {agent.session_id}[/green]")
 
     elif command == "/sessions":
         SESSION_DIR.mkdir(parents=True, exist_ok=True)
         sessions = sorted(SESSION_DIR.glob("*.json"))
         if not sessions:
-            print_info("Belum ada sesi tersimpan")
+            _render_msg("[dim]Belum ada sesi tersimpan[/dim]")
             return
         table = Table(title="Sesi Tersimpan", box=box.SIMPLE, header_style="cyan")
         table.add_column("ID", style="dim")
@@ -376,6 +433,10 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
                 pass
         console.print(table)
 
+    elif command == "/export":
+        path = parts[1] if len(parts) > 1 else f"faresta-chat-{agent.session_id}.md"
+        _export_chat(agent, config, path)
+
     elif command == "/project-config":
         proj = agent.project_config
         console.print(Panel(f"""[bold]Project Config (faresta.json)[/bold]
@@ -386,7 +447,23 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
   Deny:        {proj.permissions.deny or '-'}""", box=box.ROUNDED, border_style="cyan"))
 
     else:
-        print_error(f"Perintah '{command}' tidak dikenal. Ketik /help")
+        _render_msg(f"[red]Perintah '{command}' tidak dikenal. Ketik /help[/red]")
+
+
+def _export_chat(agent, config, path):
+    lines = []
+    lines.append(f"# Faresta Code Chat — {config.provider}/{config.model}")
+    lines.append(f"")
+    for msg in agent.messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        if role == "user" and content:
+            lines.append(f"## User\n\n{content}\n")
+        elif role == "assistant" and content:
+            lines.append(f"## Faresta\n\n{content}\n")
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
+    _render_msg(f"[green]✓ Chat diexport ke {path}[/green]")
 
 
 def _save_session(agent):

@@ -99,6 +99,20 @@ def ask(question, provider, model, yes):
     print_info(agent.cost_tracker.summary())
 
 
+LOGO = """
+[bold cyan]
+   ▄████████  ▄████████    ▄████████ ████████▄     ▄████████ ███    █▄
+  ███    ███ ███    ███   ███    ███ ███   ▀███   ███    ███ ███    ███
+  ███    █▀  ███    █▀    ███    █▀  ███    ███   ███    █▀  ███    ███
+  ███        ███         ▄███▄▄▄     ███    ███  ▄███▄▄▄     ███    ███
+▀███████████ ███        ▀▀███▀▀▀     ███    ███ ▀▀███▀▀▀     ███    ███
+         ███ ███    █▄    ███    █▄  ███    ███   ███    █▄  ███    ███
+   ▄█    ███ ███    ███   ███    ███ ███   ▄███   ███    ███ ███    ███
+ ▄████████▀  ████████▀    ██████████ ████████▀    ██████████ ████████▀
+[/bold cyan]
+"""
+
+
 @main.command()
 @click.option("-p", "--provider", help="LLM provider")
 @click.option("-m", "--model", help="Model name")
@@ -133,10 +147,21 @@ def chat(provider, model, yes, resume):
         agent.add_system_prompt()
 
     _enter_alt_screen()
-    _render_header(config)
-    _render_no_key_warning(config)
-    _fill_to_bottom()
+    _print_welcome(config)
     _repl(agent, config, llm)
+
+
+def _print_welcome(config):
+    print("\033[2J\033[H", end="", flush=True)
+    status = "[green]✓[/green]" if config.api_key else "[yellow]⚠ butuh /login[/yellow]"
+    console.print(Panel(
+        LOGO + f"\n[bold cyan]Faresta Code[/bold cyan]  v0.5.0\n[dim]AI Coding Assistant CLI[/dim]\n\nModel: [cyan]{config.provider}/{config.model}[/cyan]  Status: {status}",
+        box=box.HEAVY, border_style="cyan", padding=(1, 4), subtitle="[dim]ketik /help untuk bantuan[/dim]"
+    ))
+    console.print("")
+    if not config.api_key:
+        console.print("  [yellow]⚠ API key belum di-set — ketik /login[/yellow]")
+        console.print("")
 
 
 def _repl(agent, config, llm):
@@ -146,6 +171,7 @@ def _repl(agent, config, llm):
         agent.llm = llm
         agent.messages = []
         agent.add_system_prompt()
+        _print_welcome(config)
 
     while True:
         try:
@@ -164,91 +190,50 @@ def _repl(agent, config, llm):
 
         if user_input.strip().startswith("/"):
             _handle_slash_command(agent, user_input.strip(), config, recreate_agent)
-            _fill_to_bottom()
             continue
 
         if not user_input.strip():
             continue
 
+        console.rule(style="dim")
+        console.print(f"[bold white on blue]  YOU  [/bold white on blue] [bold]{user_input}[/bold]")
+        console.print("")
+
         with console.status("[bold cyan]  thinking...[/bold cyan]", spinner="dots"):
             try:
                 response = agent.run(user_input)
             except Exception as e:
-                _render_chat(agent, config)
-                _render_msg(f"[red]Error: {e}[/red]")
-                _fill_to_bottom()
+                console.print(f"[red]Error: {e}[/red]")
+                _print_status_bar(agent, config)
                 continue
 
-        _render_chat(agent, config)
-        _fill_to_bottom()
-
-
-def _render_chat(agent, config):
-    _render_header(config)
-    _render_no_key_warning(config)
-
-    for msg in agent.messages:
-        role = msg.get("role", "")
-        content = msg.get("content", "")
-        tool_calls = msg.get("tool_calls", [])
-
-        if role == "user" and content:
-            console.print(f"[bold]You:[/bold] {content}")
+        if response:
+            console.print(f"[bold white on cyan]  FARESTA  [/bold white on cyan]")
             console.print("")
-        elif role == "assistant":
-            if content:
-                console.print(f"[cyan]Faresta:[/cyan]")
-                print_markdown(content)
-                console.print("")
-            if tool_calls:
-                for tc in tool_calls:
-                    fn = tc.get("function", {})
-                    fn_name = fn.get("name", "?")
-                    console.print(f"[dim]  └ using {fn_name}[/dim]")
-                console.print("")
-        elif role == "tool":
-            tc_id = msg.get("tool_call_id", "")
-            fn_name = msg.get("tool_name", "?")
-            res = msg.get("content", "")
-            short = res[:120].replace("\n", " ") + ("..." if len(res) > 120 else "")
+            print_markdown(response)
+            console.print("")
+
+        tool_msgs = [m for m in agent.messages if m["role"] == "tool" and m not in getattr(agent, '_prev_tool_msgs', [])]
+        agent._prev_tool_msgs = [m for m in agent.messages if m["role"] == "tool"]
+
+        for tm in tool_msgs:
+            fn_name = tm.get("tool_name", "?")
+            res = tm.get("content", "")
+            short = res[:80].replace("\n", " ") + ("..." if len(res) > 80 else "")
             console.print(f"[dim]  └ {fn_name} → {short}[/dim]")
 
-    if not agent.messages or all(m["role"] == "system" for m in agent.messages):
-        console.print("[dim]Ketik pesan atau /help untuk bantuan[/dim]")
-        console.print("")
-
-
-def _render_no_key_warning(config):
-    if not config.api_key:
-        _render_msg("[yellow]⚠ API key belum di-set — ketik /login[/yellow]")
-
-
-def _fill_to_bottom():
-    import shutil
-    try:
-        h = shutil.get_terminal_size().lines
-        for _ in range(max(0, h - 6)):
+        if tool_msgs:
             console.print("")
-    except Exception:
-        pass
+
+        _print_status_bar(agent, config)
 
 
-def _enter_alt_screen():
-    print("\033[?1049h\033[2J\033[H", end="", flush=True)
-
-
-def _exit_alt_screen():
-    print("\033[?1049l", end="", flush=True)
-
-
-def _render_header(config):
-    status = "\033[32m✓\033[0m" if config.api_key else "\033[33m✗\033[0m"
-    print("\033[H\033[2J", end="", flush=True)
-    console.rule(f"[bold cyan]Faresta Code[/bold cyan] [dim]{config.provider}/{config.model}[/dim] {status}", style="cyan")
-
-
-def _render_msg(msg):
-    console.print(msg)
+def _print_status_bar(agent, config):
+    cost = agent.cost_tracker
+    rounds = cost.rounds
+    total_cost = cost.total_cost
+    model_label = f"{config.provider}/{config.model}"
+    console.rule(f"[dim]{model_label}[/dim] [dim]│[/dim] [dim]${total_cost:.4f}[/dim] [dim]│[/dim] [dim]{rounds} putaran[/dim]", style="dim")
 
 
 COMMON_MODELS = {
@@ -308,8 +293,8 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
 
     if command == "/clear":
         agent.reset()
-        _render_chat(agent, config)
-        _render_msg("[dim]Percakapan direset[/dim]")
+        _print_welcome(config)
+        console.print("[dim]Percakapan direset[/dim]")
 
     elif command == "/help":
         console.print(Panel("""[bold]Slash Commands[/bold]
@@ -327,13 +312,14 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
   [cyan]exit/quit[/cyan]      Keluar""", title="Help", box=box.ROUNDED, border_style="cyan"))
 
     elif command == "/login":
-        _render_header(config)
+        _print_welcome(config)
         console.print(Panel("[bold cyan]Login — Setup Provider & API Key[/bold cyan]", box=box.MINIMAL, border_style="cyan"))
         console.print("")
 
         p = _pick_provider(config, "Pilih Provider")
         if not p:
             print_error("Provider tidak valid")
+            _print_status_bar(agent, config)
             return
 
         config.provider = p
@@ -355,17 +341,17 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
 
         if recreate_agent:
             recreate_agent()
-        _render_chat(agent, config)
-        _render_msg(f"[green]✓ Login berhasil — {config.provider}/{config.model}[/green]")
+        _print_status_bar(agent, config)
 
     elif command == "/provider":
-        _render_header(config)
+        _print_welcome(config)
         console.print(Panel("[bold cyan]Ganti Provider[/bold cyan]", box=box.MINIMAL, border_style="cyan"))
         console.print("")
 
         p = _pick_provider(config, "Pilih Provider")
         if not p:
             print_error("Provider tidak valid")
+            _print_status_bar(agent, config)
             return
 
         config.provider = p
@@ -379,11 +365,10 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
 
         if recreate_agent:
             recreate_agent()
-        _render_chat(agent, config)
-        _render_msg(f"[green]✓ Provider: {config.provider}[/green]")
+        _print_status_bar(agent, config)
 
     elif command == "/model":
-        _render_header(config)
+        _print_welcome(config)
         console.print(Panel(f"[bold cyan]Ganti Model — {config.provider}[/bold cyan]", box=box.MINIMAL, border_style="cyan"))
         console.print("")
 
@@ -393,29 +378,33 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
             save_config(config)
             if recreate_agent:
                 recreate_agent()
-            _render_chat(agent, config)
-            _render_msg(f"[green]✓ Model: {config.model}[/green]")
+            console.print(f"[green]✓ Model: {config.model}[/green]")
         else:
             print_error("Model tidak valid")
+        _print_status_bar(agent, config)
 
     elif command == "/cost":
-        _render_msg(f"[cyan]biaya:[/cyan] {agent.cost_tracker.summary()}")
+        console.print(f"[cyan]biaya:[/cyan] {agent.cost_tracker.summary()}")
+        _print_status_bar(agent, config)
 
     elif command == "/tokens":
         total_chars = sum(len(m.get("content", "")) for m in agent.messages)
         tool_count = len([m for m in agent.messages if m["role"] == "tool"])
         msg_count = len(agent.messages)
-        _render_msg(f"[cyan]context:[/cyan] {msg_count} pesan, ~{total_chars} chars, {tool_count} tool calls, {agent.cost_tracker.rounds} putaran")
+        console.print(f"[cyan]context:[/cyan] {msg_count} pesan, ~{total_chars} chars, {tool_count} tool calls, {agent.cost_tracker.rounds} putaran")
+        _print_status_bar(agent, config)
 
     elif command == "/save":
         _save_session(agent)
-        _render_msg(f"[green]✓ Sesi tersimpan: {agent.session_id}[/green]")
+        console.print(f"[green]✓ Sesi tersimpan: {agent.session_id}[/green]")
+        _print_status_bar(agent, config)
 
     elif command == "/sessions":
         SESSION_DIR.mkdir(parents=True, exist_ok=True)
         sessions = sorted(SESSION_DIR.glob("*.json"))
         if not sessions:
-            _render_msg("[dim]Belum ada sesi tersimpan[/dim]")
+            console.print("[dim]Belum ada sesi tersimpan[/dim]")
+            _print_status_bar(agent, config)
             return
         table = Table(title="Sesi Tersimpan", box=box.SIMPLE, header_style="cyan")
         table.add_column("ID", style="dim")
@@ -432,10 +421,12 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
             except Exception:
                 pass
         console.print(table)
+        _print_status_bar(agent, config)
 
     elif command == "/export":
         path = parts[1] if len(parts) > 1 else f"faresta-chat-{agent.session_id}.md"
         _export_chat(agent, config, path)
+        _print_status_bar(agent, config)
 
     elif command == "/project-config":
         proj = agent.project_config
@@ -445,9 +436,11 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
   Model:       {proj.default_model or '(not set)'}
   Allow:       {proj.permissions.allow or '-'}
   Deny:        {proj.permissions.deny or '-'}""", box=box.ROUNDED, border_style="cyan"))
+        _print_status_bar(agent, config)
 
     else:
-        _render_msg(f"[red]Perintah '{command}' tidak dikenal. Ketik /help[/red]")
+        console.print(f"[red]Perintah '{command}' tidak dikenal. Ketik /help[/red]")
+        _print_status_bar(agent, config)
 
 
 def _export_chat(agent, config, path):

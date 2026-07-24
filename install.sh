@@ -58,8 +58,11 @@ fi
 
 # Install/upgrade
 printf "Installing dependencies...\n"
-"$VENV_DIR/bin/pip" install --quiet --upgrade pip setuptools wheel
-"$VENV_DIR/bin/pip" install --quiet -e "$INSTALL_DIR"
+printf "  (this may take a few minutes, especially for Rust-based packages)\n\n"
+"$VENV_DIR/bin/pip" install --upgrade pip setuptools wheel --progress-bar on 2>&1 | sed 's/^/  [pip] /'
+printf "\n"
+"$VENV_DIR/bin/pip" install -e "$INSTALL_DIR" --progress-bar on 2>&1 | sed 's/^/  [pip] /'
+printf "\n"
 
 # Create wrapper script
 WRAPPER="$BIN_DIR/faresta"

@@ -100,7 +100,7 @@ def ask(question, provider, model, yes):
 
 
 @main.command()
-@click.option("-p", "--provider", help="LLM provider (openai, anthropic, google)")
+@click.option("-p", "--provider", help="LLM provider")
 @click.option("-m", "--model", help="Model name")
 @click.option("-y", "--yes", is_flag=True, help="Skip confirmation for tool execution")
 @click.option("--resume", help="Resume a previous session by ID")
@@ -132,10 +132,10 @@ def chat(provider, model, yes, resume):
     else:
         agent.add_system_prompt()
 
-    console.clear()
-    console.print(Panel(f"[bold cyan]Faresta Code[/bold cyan]  [dim]{config.provider}/{config.model}[/dim]", box=box.MINIMAL, border_style="cyan"))
+    _clear_screen()
+    _print_header(config)
     if not config.api_key:
-        console.print("  [yellow]⚠ API key belum di-set — ketik [bold]/login[/bold][/yellow]")
+        console.print("  [yellow]⚠ API key belum di-set[/yellow]")
     console.print("")
 
     def recreate_agent():
@@ -143,14 +143,15 @@ def chat(provider, model, yes, resume):
         llm = get_provider(config)
         agent = Agent(llm, config)
         agent.add_system_prompt()
+        _print_header(config)
+        _show_model(config)
 
     while True:
-        label = f"[bold yellow]{config.provider}/{config.model}[/bold yellow]"
-        user_input = Prompt.ask(label)
+        user_input = Prompt.ask("[bold]>[/bold]")
 
         if user_input.lower() in ("exit", "quit"):
             _save_session(agent)
-            print_info("Goodbye!")
+            console.print("[dim]bye bye 👋[/dim]")
             break
 
         if user_input.strip().startswith("/"):
@@ -160,7 +161,7 @@ def chat(provider, model, yes, resume):
         if not user_input.strip():
             continue
 
-        with console.status("[bold cyan]Thinking...[/bold cyan]", spinner="dots"):
+        with console.status("[bold cyan]          thinking...[/bold cyan]", spinner="dots"):
             try:
                 response = agent.run(user_input)
             except Exception as e:
@@ -171,149 +172,172 @@ def chat(provider, model, yes, resume):
             print_markdown(response)
 
         tool_count = len([m for m in agent.messages if m["role"] == "tool"])
-        if tool_count > 0:
-            print_info(f"Tools used this round")
-        console.print("")
+        if tool_count:
+            console.print(f"[dim]— used {tool_count} tool(s)[/dim]")
+        _show_model(config)
+
+
+def _clear_screen():
+    print("\033[2J\033[H", end="")
+
+
+def _print_header(config):
+    status = "✓" if config.api_key else "✗"
+    console.print(Panel(f"[bold cyan]Faresta Code[/bold cyan]   [dim]{config.provider}[/dim] [green]{status}[/green]", box=box.MINIMAL, border_style="cyan"))
+
+
+def _show_model(config):
+    console.print(f"[dim]model: {config.provider}/{config.model}[/dim]")
+
+
+COMMON_MODELS = {
+    "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3-mini"],
+    "anthropic": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229"],
+    "google": ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"],
+    "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
+    "xai": ["grok-2-1212", "grok-beta"],
+    "deepseek": ["deepseek-chat", "deepseek-reasoner"],
+    "mistral": ["mistral-large-latest", "mistral-medium-latest", "open-mistral-nemo"],
+    "together": ["meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", "mistralai/Mixtral-8x22B-Instruct-v0.1"],
+    "nvidia": ["meta/llama-3.1-70b-instruct", "mistralai/mistral-7b-instruct-v0.3", "google/gemma-2-27b-it"],
+    "openrouter": ["anthropic/claude-3.5-sonnet", "openai/gpt-4o", "google/gemini-2.0-flash"],
+}
+
+
+def _pick_provider(config, title="Pilih Provider"):
+    PROVIDER_LIST = list(PROVIDER_DEFAULTS.keys())
+    table = Table(title=title, box=box.SIMPLE, header_style="cyan")
+    table.add_column("No", style="dim")
+    table.add_column("Provider", style="cyan")
+    table.add_column("Default Model", style="green")
+    for i, name in enumerate(PROVIDER_LIST, 1):
+        table.add_row(str(i), name, PROVIDER_DEFAULTS[name]["model"])
+    console.print(table)
+
+    choice = Prompt.ask("[yellow]Pilih nomor atau nama[/yellow]", default=config.provider)
+    if choice.isdigit():
+        idx = int(choice) - 1
+        if 0 <= idx < len(PROVIDER_LIST):
+            return PROVIDER_LIST[idx]
+        return None
+    return choice.lower() if choice.lower() in PROVIDER_DEFAULTS else None
+
+
+def _pick_model(config):
+    models = COMMON_MODELS.get(config.provider, [PROVIDER_DEFAULTS[config.provider]["model"]])
+    table = Table(title=f"Model untuk {config.provider}", box=box.SIMPLE, header_style="cyan")
+    table.add_column("No", style="dim")
+    table.add_column("Model", style="green")
+    for i, m in enumerate(models, 1):
+        table.add_row(str(i), m)
+    console.print(table)
+
+    choice = Prompt.ask(f"[yellow]Pilih nomor atau nama model[/yellow]", default=config.model)
+    if choice.isdigit():
+        idx = int(choice) - 1
+        if 0 <= idx < len(models):
+            return models[idx]
+        return None
+    return choice
 
 
 def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
     parts = cmd.split()
     command = parts[0].lower()
-    args = parts[1:]
-
-    PROVIDER_LIST = list(PROVIDER_DEFAULTS.keys())
 
     if command == "/clear":
-        console.clear()
-        console.print(Panel(f"[bold cyan]Faresta Code[/bold cyan]  [dim]{config.provider}/{config.model}[/dim]", box=box.MINIMAL, border_style="cyan"))
         agent.reset()
+        _clear_screen()
+        _print_header(config)
+        if not config.api_key:
+            console.print("  [yellow]⚠ API key belum di-set[/yellow]")
         console.print("")
 
     elif command == "/help":
         console.print(Panel("""[bold]Slash Commands[/bold]
 
-  [cyan]/login[/cyan]       Set API key & provider (interaktif)
-  [cyan]/provider[/cyan]    Ganti provider AI
-  [cyan]/model[/cyan]       Ganti model AI
-  [cyan]/clear[/cyan]       Reset percakapan
-  [cyan]/cost[/cyan]        Lihat token & biaya
-  [cyan]/tokens[/cyan]      Statistik konteks
-  [cyan]/save[/cyan]        Simpan sesi
-  [cyan]/sessions[/cyan]    Daftar sesi tersimpan
-  [cyan]/project-config[/cyan]  Lihat config proyek
-  [cyan]exit/quit[/cyan]    Keluar""", title="Help", box=box.ROUNDED, border_style="cyan"))
+  [cyan]/login[/cyan]         Set API key + pilih provider
+  [cyan]/provider[/cyan]      Ganti provider AI
+  [cyan]/model[/cyan]         Ganti model AI
+  [cyan]/clear[/cyan]         Reset percakapan
+  [cyan]/cost[/cyan]          Lihat pemakaian token & biaya
+  [cyan]/tokens[/cyan]        Statistik konteks
+  [cyan]/save[/cyan]          Simpan sesi ini
+  [cyan]/sessions[/cyan]      Daftar sesi tersimpan
+  [cyan]/project-config[/cyan]  Config proyek (faresta.json)
+  [cyan]exit/quit[/cyan]      Keluar""", title="Help", box=box.ROUNDED, border_style="cyan"))
 
     elif command == "/login":
-        table = Table(title="Pilih Provider", box=box.SIMPLE, header_style="cyan")
-        table.add_column("No", style="dim")
-        table.add_column("Provider", style="cyan")
-        table.add_column("Env Key", style="yellow")
-        table.add_column("Default Model", style="green")
-        for i, name in enumerate(PROVIDER_LIST, 1):
-            info = PROVIDER_DEFAULTS[name]
-            table.add_row(str(i), name, info["env_key"], info["model"])
-        console.print(table)
+        _clear_screen()
+        console.print(Panel("[bold cyan]Login — Setup Provider & API Key[/bold cyan]", box=box.MINIMAL, border_style="cyan"))
+        console.print("")
 
-        choice = Prompt.ask("[yellow]Pilih nomor atau nama provider[/yellow]", default=config.provider)
-        if choice.isdigit():
-            idx = int(choice) - 1
-            if 0 <= idx < len(PROVIDER_LIST):
-                p = PROVIDER_LIST[idx]
-            else:
-                print_error("Nomor tidak valid")
-                return
-        else:
-            p = choice.lower()
+        p = _pick_provider(config, "Pilih Provider")
+        if not p:
+            print_error("Provider tidak valid")
+            return
 
-        if p in PROVIDER_DEFAULTS:
-            config.provider = p
-            defaults = PROVIDER_DEFAULTS[p]
-            config.model = defaults["model"]
+        config.provider = p
+        defaults = PROVIDER_DEFAULTS[p]
+        config.model = defaults["model"]
+
+        api = Prompt.ask(f"[yellow]API Key untuk {p}[/yellow]", password=True)
+        while not api:
+            print_warning("API Key wajib diisi")
             api = Prompt.ask(f"[yellow]API Key untuk {p}[/yellow]", password=True)
-            if api:
-                config.api_key = api
-            save_config(config)
-            console.clear()
-            console.print(Panel(f"[bold cyan]Faresta Code[/bold cyan]  [dim]{config.provider}/{config.model}[/dim]", box=box.MINIMAL, border_style="cyan"))
-            console.print(f"  [green]✓ Login berhasil — {config.provider}/{config.model}[/green]")
-            if recreate_agent:
-                recreate_agent()
-            console.print("")
+
+        config.api_key = api
+        save_config(config)
+
+        m = _pick_model(config)
+        if m:
+            config.model = m
+
+        save_config(config)
+        _clear_screen()
+        _print_header(config)
+        if recreate_agent:
+            recreate_agent()
         else:
-            print_error(f"Provider '{p}' tidak dikenal")
+            _show_model(config)
+        console.print(f"  [green]✓ Login berhasil — {config.provider}/{config.model}[/green]")
+        console.print("")
 
     elif command == "/provider":
-        table = Table(title="Pilih Provider", box=box.SIMPLE, header_style="cyan")
-        table.add_column("No", style="dim")
-        table.add_column("Provider", style="cyan")
-        table.add_column("Model Default", style="green")
-        for i, name in enumerate(PROVIDER_LIST, 1):
-            info = PROVIDER_DEFAULTS[name]
-            table.add_row(str(i), name, info["model"])
-        console.print(table)
+        p = _pick_provider(config, "Ganti Provider")
+        if not p:
+            print_error("Provider tidak valid")
+            return
 
-        choice = Prompt.ask("[yellow]Pilih nomor atau nama provider[/yellow]", default=config.provider)
-        if choice.isdigit():
-            idx = int(choice) - 1
-            if 0 <= idx < len(PROVIDER_LIST):
-                p = PROVIDER_LIST[idx]
-            else:
-                print_error("Nomor tidak valid")
-                return
-        else:
-            p = choice.lower()
+        config.provider = p
+        defaults = PROVIDER_DEFAULTS[p]
+        config.model = defaults["model"]
 
-        if p in PROVIDER_DEFAULTS:
-            config.provider = p
-            defaults = PROVIDER_DEFAULTS[p]
-            config.model = defaults["model"]
-            save_config(config)
-            if recreate_agent:
-                recreate_agent()
-            console.print(f"  [green]✓ Provider: {config.provider} / {config.model}[/green]")
+        m = _pick_model(config)
+        if m:
+            config.model = m
+
+        save_config(config)
+        if recreate_agent:
+            recreate_agent()
         else:
-            print_error(f"Provider '{p}' tidak dikenal")
+            _clear_screen()
+            _print_header(config)
+            _show_model(config)
+        console.print(f"  [green]✓ Provider: {config.provider}[/green]")
+        console.print("")
 
     elif command == "/model":
-        defaults = PROVIDER_DEFAULTS.get(config.provider, {})
-        common_models = {
-            "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o3-mini"],
-            "anthropic": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-opus-20240229"],
-            "google": ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"],
-            "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
-            "xai": ["grok-2-1212", "grok-beta"],
-            "deepseek": ["deepseek-chat", "deepseek-reasoner"],
-            "mistral": ["mistral-large-latest", "mistral-medium-latest", "open-mistral-nemo"],
-            "together": ["meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", "mistralai/Mixtral-8x22B-Instruct-v0.1"],
-            "nvidia": ["meta/llama-3.1-70b-instruct", "mistralai/mistral-7b-instruct-v0.3"],
-            "openrouter": ["anthropic/claude-3.5-sonnet", "openai/gpt-4o", "google/gemini-2.0-flash"],
-        }
-
-        models = common_models.get(config.provider, [defaults.get("model", "")])
-        table = Table(title=f"Model untuk {config.provider}", box=box.SIMPLE, header_style="cyan")
-        table.add_column("No", style="dim")
-        table.add_column("Model", style="green")
-        for i, m in enumerate(models, 1):
-            table.add_row(str(i), m)
-        console.print(table)
-
-        choice = Prompt.ask(f"[yellow]Nama model[/yellow]", default=config.model)
-        if choice.isdigit():
-            idx = int(choice) - 1
-            if 0 <= idx < len(models):
-                model = models[idx]
-            else:
-                print_error("Nomor tidak valid")
-                return
-        else:
-            model = choice
-
-        if model:
-            config.model = model
+        m = _pick_model(config)
+        if m:
+            config.model = m
             save_config(config)
             if recreate_agent:
                 recreate_agent()
+            _show_model(config)
             console.print(f"  [green]✓ Model: {config.model}[/green]")
+        else:
+            print_error("Model tidak valid")
 
     elif command == "/cost":
         print_info(agent.cost_tracker.summary())
@@ -322,23 +346,23 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
         total_chars = sum(len(m.get("content", "")) for m in agent.messages)
         tool_count = len([m for m in agent.messages if m["role"] == "tool"])
         msg_count = len(agent.messages)
-        console.print(f"[cyan]Context stats:[/cyan] {msg_count} messages, ~{total_chars} chars, {tool_count} tool results, {agent.cost_tracker.rounds} rounds")
+        console.print(f"[cyan]context:[/cyan] {msg_count} pesan, ~{total_chars} chars, {tool_count} tool calls, {agent.cost_tracker.rounds} putaran")
 
     elif command == "/save":
         _save_session(agent)
-        print_success(f"Session saved: {agent.session_id}")
+        print_success(f"Sesi tersimpan: {agent.session_id}")
 
     elif command == "/sessions":
         SESSION_DIR.mkdir(parents=True, exist_ok=True)
         sessions = sorted(SESSION_DIR.glob("*.json"))
         if not sessions:
-            print_info("No saved sessions")
+            print_info("Belum ada sesi tersimpan")
             return
-        table = Table(title="Saved Sessions", box=box.SIMPLE, header_style="cyan")
+        table = Table(title="Sesi Tersimpan", box=box.SIMPLE, header_style="cyan")
         table.add_column("ID", style="dim")
-        table.add_column("Date", style="yellow")
-        table.add_column("Messages")
-        table.add_column("Cost")
+        table.add_column("Tanggal", style="yellow")
+        table.add_column("Pesan")
+        table.add_column("Biaya")
         for s in sessions:
             try:
                 data = json.loads(s.read_text())
@@ -357,11 +381,10 @@ def _handle_slash_command(agent, cmd: str, config: Config, recreate_agent=None):
   Provider:    {proj.default_provider or '(not set)'}
   Model:       {proj.default_model or '(not set)'}
   Allow:       {proj.permissions.allow or '-'}
-  Deny:        {proj.permissions.deny or '-'}
-  Test cmd:    {proj.test_command or '(auto)'}""", box=box.ROUNDED, border_style="cyan"))
+  Deny:        {proj.permissions.deny or '-'}""", box=box.ROUNDED, border_style="cyan"))
 
     else:
-        print_error(f"Unknown command: {command}. Type /help")
+        print_error(f"Perintah '{command}' tidak dikenal. Ketik /help")
 
 
 def _save_session(agent):

@@ -76,7 +76,7 @@ class Agent:
             tool_calls = assistant_msg.get("tool_calls", [])
 
             if assistant_msg.get("usage"):
-                usage = assistant_msg["usage"]
+                usage = assistant_msg.pop("usage")
                 self.cost_tracker.add_usage(
                     usage.get("input_tokens", 0),
                     usage.get("output_tokens", 0),

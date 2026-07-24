@@ -59,9 +59,9 @@ def get_provider(config: Config) -> LLMProvider | None:
     known = ", ".join(providers.keys())
     if COMPATIBLE_PROVIDERS:
         known += ", " + ", ".join(COMPATIBLE_PROVIDERS.keys())
-    print_error(f"Unknown provider '{config.provider}'. Available: {known}")
-    print_info("Tip: Cek config dengan: faresta config-show")
-    sys.exit(1)
+    print_warning(f"Provider '{config.provider}' tidak dikenal. Available: {known}")
+    print_info("Ketik /login untuk setup atau /provider untuk ganti provider.")
+    return None
 
 
 @click.group()

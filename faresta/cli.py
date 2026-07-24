@@ -3,12 +3,13 @@ import json
 import click
 from pathlib import Path
 from datetime import datetime
-from .config import load_config, save_config, Config, HISTORY_DIR
+from .config import load_config, save_config, Config, HISTORY_DIR, PROVIDER_DEFAULTS
 from .project_config import ProjectConfig
 from .llm.base import LLMProvider
 from .llm.openai_provider import OpenAIProvider
 from .llm.anthropic_provider import AnthropicProvider
 from .llm.google_provider import GoogleProvider
+from .llm.openai_compatible import create_provider, COMPATIBLE_PROVIDERS
 from .agent import Agent
 from .tools.core import register_core_tools
 from .tools.social import register_social_tools
@@ -23,7 +24,8 @@ SESSION_DIR = HISTORY_DIR
 
 def get_provider(config: Config) -> LLMProvider:
     if not config.api_key:
-        print_error(f"No API key found for provider '{config.provider}'. Set FARESTA_API_KEY or {config.provider.upper()}_API_KEY.")
+        env_hint = PROVIDER_DEFAULTS.get(config.provider, {}).get("env_key", "API_KEY")
+        print_error(f"No API key found for provider '{config.provider}'. Set {env_hint} environment variable.")
         sys.exit(1)
 
     providers = {
@@ -31,17 +33,28 @@ def get_provider(config: Config) -> LLMProvider:
         "anthropic": AnthropicProvider,
         "google": GoogleProvider,
     }
-    cls = providers.get(config.provider)
-    if not cls:
-        print_error(f"Unknown provider '{config.provider}'. Use: openai, anthropic, google")
-        sys.exit(1)
 
-    return cls(
-        api_key=config.api_key,
-        model=config.model,
-        temperature=config.temperature,
-        max_tokens=config.max_tokens,
-    )
+    if config.provider in providers:
+        cls = providers[config.provider]
+        return cls(
+            api_key=config.api_key,
+            model=config.model,
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
+        )
+
+    if config.provider in COMPATIBLE_PROVIDERS:
+        return create_provider(
+            name=config.provider,
+            api_key=config.api_key,
+            model=config.model,
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
+        )
+
+    known = ", ".join(list(providers.keys()) + list(COMPATIBLE_PROVIDERS.keys()))
+    print_error(f"Unknown provider '{config.provider}'. Available: {known}")
+    sys.exit(1)
 
 
 @click.group()

@@ -6,23 +6,34 @@ CONFIG_DIR = Path.home() / ".config" / "faresta"
 CONFIG_FILE = CONFIG_DIR / "config.yml"
 HISTORY_DIR = CONFIG_DIR / "history"
 
+PROVIDER_DEFAULTS = {
+    "openai": {"model": "gpt-4o", "env_key": "OPENAI_API_KEY"},
+    "anthropic": {"model": "claude-sonnet-4-20250514", "env_key": "ANTHROPIC_API_KEY"},
+    "google": {"model": "gemini-2.5-flash", "env_key": "GOOGLE_API_KEY"},
+    "groq": {"model": "llama-3.3-70b-versatile", "env_key": "GROQ_API_KEY"},
+    "xai": {"model": "grok-2-1212", "env_key": "XAI_API_KEY"},
+    "nvidia": {"model": "meta/llama-3.1-70b-instruct", "env_key": "NVIDIA_API_KEY"},
+    "deepseek": {"model": "deepseek-chat", "env_key": "DEEPSEEK_API_KEY"},
+    "mistral": {"model": "mistral-large-latest", "env_key": "MISTRAL_API_KEY"},
+    "together": {"model": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", "env_key": "TOGETHER_API_KEY"},
+    "openrouter": {"model": "anthropic/claude-3.5-sonnet", "env_key": "OPENROUTER_API_KEY"},
+}
+
 
 class Config(BaseModel):
     provider: str = "openai"
     model: str = ""
     api_key: str = ""
     temperature: float = 0.7
-    max_tokens: int = 4096
-    system_prompt: str = "You are Faresta Code, an AI coding assistant."
+    max_tokens: int = 8192
+    effort: str = "medium"
+    system_prompt: str = "Anda adalah Faresta Code, AI coding assistant yang membantu user di terminal. Anda bisa menjalankan perintah shell, membaca/menulis file, mencari kode, dan mengakses web. Selalu jelaskan apa yang Anda lakukan. Gunakan Bahasa Indonesia untuk menjawab."
+    tool_confirm: bool = False
 
     def model_post_init(self, __context):
         if not self.model:
-            default_models = {
-                "openai": "gpt-4o",
-                "anthropic": "claude-sonnet-4-20250514",
-                "google": "gemini-2.5-flash",
-            }
-            self.model = default_models.get(self.provider, "gpt-4o")
+            defaults = PROVIDER_DEFAULTS.get(self.provider, {})
+            self.model = defaults.get("model", "gpt-4o")
 
 
 def load_config() -> Config:
@@ -37,12 +48,8 @@ def load_config() -> Config:
         api_key = data.get("api_key", api_key) if not api_key else api_key
 
     if not api_key:
-        provider_api_key_env = {
-            "openai": "OPENAI_API_KEY",
-            "anthropic": "ANTHROPIC_API_KEY",
-            "google": "GOOGLE_API_KEY",
-        }
-        env_var = provider_api_key_env.get(provider, "OPENAI_API_KEY")
+        defaults = PROVIDER_DEFAULTS.get(provider, {})
+        env_var = defaults.get("env_key", "OPENAI_API_KEY")
         api_key = os.getenv(env_var, "")
 
     config = Config(provider=provider, api_key=api_key)

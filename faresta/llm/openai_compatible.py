@@ -3,10 +3,52 @@ from openai import OpenAI
 from .base import LLMProvider
 
 
-class OpenAIProvider(LLMProvider):
-    def __init__(self, api_key: str, model: str = "gpt-4o", temperature: float = 0.7, max_tokens: int = 4096, effort: str = "medium"):
+COMPATIBLE_PROVIDERS = {
+    "groq": {
+        "base_url": "https://api.groq.com/openai/v1",
+        "default_model": "llama-3.3-70b-versatile",
+        "env_key": "GROQ_API_KEY",
+    },
+    "xai": {
+        "base_url": "https://api.x.ai/v1",
+        "default_model": "grok-2-1212",
+        "env_key": "XAI_API_KEY",
+    },
+    "nvidia": {
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "default_model": "meta/llama-3.1-70b-instruct",
+        "env_key": "NVIDIA_API_KEY",
+    },
+    "deepseek": {
+        "base_url": "https://api.deepseek.com",
+        "default_model": "deepseek-chat",
+        "env_key": "DEEPSEEK_API_KEY",
+    },
+    "mistral": {
+        "base_url": "https://api.mistral.ai/v1",
+        "default_model": "mistral-large-latest",
+        "env_key": "MISTRAL_API_KEY",
+    },
+    "together": {
+        "base_url": "https://api.together.xyz/v1",
+        "default_model": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+        "env_key": "TOGETHER_API_KEY",
+    },
+    "openrouter": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "default_model": "anthropic/claude-3.5-sonnet",
+        "env_key": "OPENROUTER_API_KEY",
+    },
+}
+
+
+class OpenAICompatibleProvider(LLMProvider):
+    def __init__(self, api_key: str, model: str = "gpt-4o", temperature: float = 0.7, max_tokens: int = 4096, effort: str = "medium", base_url: str | None = None):
         super().__init__(api_key, model, temperature, max_tokens, effort)
-        self.client = OpenAI(api_key=api_key)
+        kwargs = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+        self.client = OpenAI(**kwargs)
 
     def chat(self, messages: list[dict], stream: bool = True, tools: list[dict] | None = None) -> Generator[dict, None, None]:
         kwargs = dict(
@@ -67,9 +109,6 @@ class OpenAIProvider(LLMProvider):
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
-        effort_map = {"low": "low", "medium": "medium", "high": "high"}
-        if self.model in ("o1", "o3-mini", "o1-mini", "o3"):
-            kwargs["reasoning_effort"] = effort_map.get(self.effort, "medium")
         if tools:
             kwargs["tools"] = tools
         response = self.client.chat.completions.create(**kwargs)
@@ -86,3 +125,17 @@ class OpenAIProvider(LLMProvider):
                 "output_tokens": response.usage.completion_tokens,
             }
         return result
+
+
+def create_provider(name: str, api_key: str, model: str = "", temperature: float = 0.7, max_tokens: int = 4096, effort: str = "medium") -> OpenAICompatibleProvider:
+    info = COMPATIBLE_PROVIDERS.get(name)
+    if not info:
+        raise ValueError(f"Unknown provider '{name}'")
+    return OpenAICompatibleProvider(
+        api_key=api_key,
+        model=model or info["default_model"],
+        temperature=temperature,
+        max_tokens=max_tokens,
+        effort=effort,
+        base_url=info["base_url"],
+    )

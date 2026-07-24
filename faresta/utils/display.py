@@ -1,7 +1,7 @@
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.prompt import Prompt
+from rich.prompt import Prompt, Confirm
 from rich.table import Table
 from rich.syntax import Syntax
 from rich import box
@@ -11,7 +11,7 @@ console = Console()
 
 def print_welcome():
     title = "[bold cyan]Faresta Code[/bold cyan] — AI Coding Assistant"
-    subtitle = "[dim]Multi-provider LLM CLI[/dim]"
+    subtitle = "[dim]Multi-provider LLM CLI • Agentic mode with tools • Git integration[/dim]"
     console.print(Panel(f"{title}\n{subtitle}", box=box.ROUNDED, border_style="cyan"))
 
 
@@ -31,5 +31,13 @@ def print_success(msg: str):
     console.print(f"[green]✓ {msg}[/green]")
 
 
+def print_warning(msg: str):
+    console.print(f"[yellow]⚠ {msg}[/yellow]")
+
+
 def input_user(prompt: str = "You") -> str:
     return Prompt.ask(f"[bold yellow]{prompt}[/bold yellow]")
+
+
+def confirm_action(msg: str) -> bool:
+    return Confirm.ask(f"[yellow]Confirm[/yellow] {msg}", default=True)

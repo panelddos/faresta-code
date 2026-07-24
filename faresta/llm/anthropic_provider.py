@@ -40,7 +40,6 @@ class AnthropicProvider(LLMProvider):
                     if event.type == "content_block_start":
                         if event.content_block.type == "tool_use":
                             current_tool_block = {"id": event.content_block.id, "name": event.content_block.name, "arguments": ""}
-                            yield {"type": "tool_call_start", "id": event.content_block.id, "name": event.content_block.name, "arguments": ""}
                         elif event.content_block.type == "text":
                             yield {"type": "content", "content": event.content_block.text}
                     elif event.type == "content_block_delta":
@@ -48,7 +47,6 @@ class AnthropicProvider(LLMProvider):
                             yield {"type": "content", "content": event.delta.text}
                         elif event.delta.type == "input_json_delta" and current_tool_block:
                             current_tool_block["arguments"] += event.delta.partial_json
-                            yield {"type": "tool_call_args", "id": current_tool_block["id"], "arguments": event.delta.partial_json}
                     elif event.type == "content_block_stop" and current_tool_block:
                         yield {"type": "tool_call", "id": current_tool_block["id"], "name": current_tool_block["name"], "arguments": current_tool_block["arguments"]}
                         current_tool_block = None
@@ -58,6 +56,8 @@ class AnthropicProvider(LLMProvider):
                         if block.type == "text":
                             yield {"type": "content_done", "content": block.text}
                             break
+                if hasattr(final, 'usage') and final.usage:
+                    yield {"type": "usage", "input_tokens": final.usage.input_tokens, "output_tokens": final.usage.output_tokens}
         else:
             response = self.client.messages.create(**kwargs)
             result_content = ""

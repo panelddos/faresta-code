@@ -23,16 +23,34 @@ class OpenAIProvider(LLMProvider):
 
         if stream:
             full_content = ""
+            tool_calls_acc: dict[int, dict] = {}
             for chunk in response:
+                if not chunk.choices:
+                    if hasattr(chunk, 'usage') and chunk.usage:
+                        yield {"type": "usage", "input_tokens": chunk.usage.prompt_tokens or 0, "output_tokens": chunk.usage.completion_tokens or 0}
+                    continue
                 delta = chunk.choices[0].delta if chunk.choices else None
                 if delta and delta.content:
                     full_content += delta.content
                     yield {"type": "content", "content": delta.content}
                 if delta and delta.tool_calls:
                     for tc in delta.tool_calls:
-                        yield {"type": "tool_call_start", "id": tc.id, "name": tc.function.name if tc.function else "", "arguments": tc.function.arguments if tc.function else ""}
+                        idx = tc.index
+                        if idx not in tool_calls_acc:
+                            tool_calls_acc[idx] = {"id": tc.id or "", "name": (tc.function.name if tc.function else "") or "", "arguments": ""}
+                        if tc.id:
+                            tool_calls_acc[idx]["id"] = tc.id
+                        if tc.function:
+                            if tc.function.name:
+                                tool_calls_acc[idx]["name"] = tc.function.name
+                            if tc.function.arguments:
+                                tool_calls_acc[idx]["arguments"] += tc.function.arguments
             if full_content:
                 yield {"type": "content_done", "content": full_content}
+            if tool_calls_acc:
+                calls = [{"type": "tool_call", "id": v["id"], "name": v["name"], "arguments": v["arguments"]} for k, v in sorted(tool_calls_acc.items())]
+                for c in calls:
+                    yield c
         else:
             msg = response.choices[0].message
             if msg.content:

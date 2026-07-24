@@ -62,8 +62,10 @@ class GoogleProvider(LLMProvider):
             config=config,
         )
 
+        full_content = ""
         for chunk in response:
             if chunk.text:
+                full_content += chunk.text
                 yield {"type": "content", "content": chunk.text}
             if chunk.candidates:
                 for c in chunk.candidates:
@@ -71,7 +73,11 @@ class GoogleProvider(LLMProvider):
                         for part in c.content.parts:
                             if part.function_call:
                                 fc = part.function_call
-                                yield {"type": "tool_call", "id": str(id(fc)) if not hasattr(fc, 'id') else fc.id, "name": fc.name, "arguments": str(dict(fc.args)) if hasattr(fc, 'args') else "{}"}
+                                yield {"type": "tool_call", "id": str(id(fc)), "name": fc.name, "arguments": str(dict(fc.args)) if hasattr(fc, 'args') else "{}"}
+        if full_content:
+            yield {"type": "content_done", "content": full_content}
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            yield {"type": "usage", "input_tokens": response.usage_metadata.prompt_token_count, "output_tokens": response.usage_metadata.candidates_token_count}
 
     def chat_non_streaming(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
         system, history = self._prepare_contents(messages)

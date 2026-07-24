@@ -60,6 +60,27 @@ class Agent:
     def run(self, user_input: str) -> str:
         if self.llm is None:
             return "API key belum di-set. Ketik /login untuk setup provider dan API key."
+        result = ""
+        for event in self.run_streaming(user_input):
+            if event["type"] == "done":
+                result = event["content"]
+        return result
+
+    def run_streaming(self, user_input: str):
+        """Generator that yields streaming events while processing input.
+        
+        Events:
+          {"type": "content", "content": str}      — text token
+          {"type": "content_done", "content": str} — full text complete
+          {"type": "tool_call", ...}                — tool call started (non-streaming event from previous round)
+          {"type": "tool_start", "name": str}       — tool execution starting
+          {"type": "tool_result", "name": str, "content": str, "error": bool} — tool result
+          {"type": "done", "content": str}          — all done, final response
+        """
+        if self.llm is None:
+            yield {"type": "done", "content": "API key belum di-set. Ketik /login untuk setup provider dan API key."}
+            return
+
         self.messages.append({"role": "user", "content": user_input})
         final_response = ""
         tool_round = 0
@@ -68,127 +89,139 @@ class Agent:
 
         while tool_round < self.max_tool_rounds:
             tool_round += 1
-            has_tool_calls = False
+            round_content = ""
+            round_tool_calls = []
+            usage = None
 
-            with console.status("[bold cyan]Thinking...[/bold cyan]", spinner="dots"):
-                try:
-                    assistant_msg = self.llm.chat_non_streaming(
-                        messages=self.messages,
-                        tools=self._get_tools_for_api(),
-                    )
-                except Exception as e:
-                    err = str(e).lower()
-                    if "401" in err or "unauthorized" in err or "auth" in err:
-                        return "✖ API Key tidak valid. Ketik /login untuk set API key baru."
-                    if "429" in err or "rate" in err or "quota" in err:
-                        return "✖ Rate limit / quota habis. Tunggu beberapa saat atau ganti provider."
-                    if "timeout" in err or "timed out" in err:
-                        return "✖ Provider AI timeout. Coba model yang lebih kecil atau effort lebih rendah."
-                    if "context" in err and "length" in err or "too long" in err or "maximum" in err and "token" in err:
-                        self.messages = [self.messages[0]] + self.messages[-4:]
-                        return "✖ Konteks penuh — percakapan lama dihapus, silakan kirim ulang."
+            try:
+                for event in self.llm.chat(
+                    messages=self.messages,
+                    tools=self._get_tools_for_api(),
+                ):
+                    if event["type"] == "content":
+                        round_content += event["content"]
+                        yield event
+                    elif event["type"] == "content_done":
+                        round_content = event["content"]
+                        yield event
+                    elif event["type"] == "tool_call":
+                        round_tool_calls.append(event)
+                    elif event["type"] == "usage":
+                        usage = event
+            except Exception as e:
+                err = str(e).lower()
+                if "401" in err or "unauthorized" in err or "auth" in err:
+                    yield {"type": "done", "content": "✖ API Key tidak valid. Ketik /login untuk set API key baru."}
+                elif "429" in err or "rate" in err or "quota" in err:
+                    yield {"type": "done", "content": "✖ Rate limit / quota habis. Tunggu beberapa saat atau ganti provider."}
+                elif "timeout" in err or "timed out" in err:
+                    yield {"type": "done", "content": "✖ Provider AI timeout. Coba model yang lebih kecil atau effort lebih rendah."}
+                elif ("context" in err and "length" in err) or "too long" in err or ("maximum" in err and "token" in err):
+                    self.messages = [self.messages[0]] + self.messages[-4:]
+                    yield {"type": "done", "content": "✖ Konteks penuh — percakapan lama dihapus, silakan kirim ulang."}
+                else:
                     raise
+                return
 
-            response_text = assistant_msg.get("content", "")
-            tool_calls = assistant_msg.get("tool_calls", [])
-
-            if assistant_msg.get("usage"):
-                usage = assistant_msg.pop("usage")
+            if usage:
                 self.cost_tracker.add_usage(
                     usage.get("input_tokens", 0),
                     usage.get("output_tokens", 0),
                     self.config.provider,
                 )
 
-            if tool_calls:
-                has_tool_calls = True
-                if response_text:
-                    final_response += response_text + "\n\n"
+            if not round_tool_calls:
+                final_response += round_content
+                self.messages.append({"role": "assistant", "content": round_content})
+                yield {"type": "done", "content": final_response.strip()}
+                return
 
-                tool_results = []
-                for tc in tool_calls:
-                    fn = tc.get("function", {})
-                    name = fn.get("name", "")
-                    raw_args = fn.get("arguments", "{}")
-                    if isinstance(raw_args, str):
-                        try:
-                            args = json.loads(raw_args)
-                        except json.JSONDecodeError:
-                            args = {}
-                    else:
-                        args = raw_args
+            has_tool_calls = True
+            if round_content:
+                final_response += round_content + "\n\n"
 
-                    allowed = self.project_config.is_tool_allowed(name)
-                    if allowed is False:
-                        tool_results.append({
-                            "role": "tool",
-                            "tool_call_id": tc.get("id", ""),
-                            "tool_name": name,
-                            "content": f"Error: Tool '{name}' is denied by project config (faresta.json)",
-                        })
-                        continue
-                    elif allowed is None and self.config.tool_confirm:
-                        args_str = ", ".join(f"{k}={v}" for k, v in args.items())
-                        if not confirm_action(f"Run tool '{name}' with args: {args_str}"):
-                            tool_results.append({
-                                "role": "tool",
-                                "tool_call_id": tc.get("id", ""),
-                                "tool_name": name,
-                                "content": "Tool execution cancelled by user",
-                            })
-                            continue
+            tool_results = []
+            for tc in round_tool_calls:
+                name = tc.get("name", "")
+                raw_args = tc.get("arguments", "{}")
+                if isinstance(raw_args, str):
+                    try:
+                        args = json.loads(raw_args)
+                    except json.JSONDecodeError:
+                        args = {}
+                else:
+                    args = raw_args
 
-                    print_info(f"  Using tool: {name}")
-                    result = self.registry.execute(name, **args)
-
-                    if not result.startswith("Error") and name in ("edit", "write", "delete"):
-                        lint_result = self.registry.execute("lint_test", command="lint", path=".")
-                        if lint_result and "No recognized" not in lint_result:
-                            result += f"\n\n[auto-lint]\n{lint_result}"
-
-                    if "Error" in result[:10] and tool_round < self.max_tool_rounds:
-                        retry_counts[name] = retry_counts.get(name, 0) + 1
-                        if retry_counts[name] > max_retries_per_tool:
-                            print_warning(f"  Tool '{name}' gagal setelah {max_retries_per_tool}x percobaan, berhenti")
-                            tool_results.append({
-                                "role": "tool",
-                                "tool_call_id": tc.get("id", ""),
-                                "tool_name": name,
-                                "content": result[:2000] if len(result) > 2000 else result,
-                            })
-                            continue
-                        print_warning(f"  Tool '{name}' returned error (attempt {retry_counts[name]}/{max_retries_per_tool}), will retry with explanation")
-                        self.messages.append(assistant_msg)
-                        self.messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc.get("id", ""),
-                            "tool_name": name,
-                            "content": result[:2000] if len(result) > 2000 else result,
-                        })
-                        self.messages.append({
-                            "role": "user",
-                            "content": f"Tool '{name}' returned an error: {result[:500]}. Please analyze the error and try a different approach or fix the issue.",
-                        })
-                        continue
-
+                allowed = self.project_config.is_tool_allowed(name)
+                if allowed is False:
                     tool_results.append({
-                        "role": "tool",
-                        "tool_call_id": tc.get("id", ""),
+                        "role": "tool", "tool_call_id": tc.get("id", ""),
                         "tool_name": name,
-                        "content": result[:3000] if len(result) > 3000 else result,
+                        "content": f"Error: Tool '{name}' is denied by project config (faresta.json)",
                     })
+                    continue
+                elif allowed is None and self.config.tool_confirm:
+                    args_str = ", ".join(f"{k}={v}" for k, v in args.items())
+                    if not confirm_action(f"Run tool '{name}' with args: {args_str}"):
+                        tool_results.append({
+                            "role": "tool", "tool_call_id": tc.get("id", ""),
+                            "tool_name": name, "content": "Tool execution cancelled by user",
+                        })
+                        continue
 
+                yield {"type": "tool_start", "name": name}
+                result = self.registry.execute(name, **args)
+
+                if not result.startswith("Error") and name in ("edit", "write", "delete"):
+                    lint_result = self.registry.execute("lint_test", command="lint", path=".")
+                    if lint_result and "No recognized" not in lint_result:
+                        result += f"\n\n[auto-lint]\n{lint_result}"
+
+                is_error = "Error" in result[:10]
+                yield {"type": "tool_result", "name": name, "content": result[:300] if is_error else result[:200], "error": is_error}
+
+                if is_error and tool_round < self.max_tool_rounds:
+                    retry_counts[name] = retry_counts.get(name, 0) + 1
+                    if retry_counts[name] > max_retries_per_tool:
+                        print_warning(f"  Tool '{name}' gagal setelah {max_retries_per_tool}x percobaan, berhenti")
+                        tool_results.append({
+                            "role": "tool", "tool_call_id": tc.get("id", ""),
+                            "tool_name": name, "content": result[:2000],
+                        })
+                        continue
+                    assistant_msg = {"role": "assistant", "content": round_content, "tool_calls": [{
+                        "id": tc.get("id", ""), "type": "function",
+                        "function": {"name": name, "arguments": raw_args},
+                    }]}
+                    self.messages.append(assistant_msg)
+                    self.messages.append({
+                        "role": "tool", "tool_call_id": tc.get("id", ""),
+                        "tool_name": name, "content": result[:2000],
+                    })
+                    self.messages.append({
+                        "role": "user",
+                        "content": f"Tool '{name}' returned an error: {result[:500]}. Please analyze the error and try a different approach or fix the issue.",
+                    })
+                    continue
+
+                tool_results.append({
+                    "role": "tool", "tool_call_id": tc.get("id", ""),
+                    "tool_name": name, "content": result[:3000] if len(result) > 3000 else result,
+                })
+
+            if tool_results:
+                assistant_msg = {"role": "assistant", "content": round_content, "tool_calls": [
+                    {"id": tc.get("id", ""), "type": "function",
+                     "function": {"name": tc.get("name", ""), "arguments": tc.get("arguments", "{}")}}
+                    for tc in round_tool_calls
+                ]}
                 self.messages.append(assistant_msg)
                 self.messages.extend(tool_results)
-            else:
-                final_response += response_text
-                self.messages.append(assistant_msg)
-                break
 
             if not has_tool_calls:
                 break
 
-        return final_response.strip()
+        yield {"type": "done", "content": final_response.strip()}
 
     def _get_tools_for_api(self):
         provider = self.config.provider

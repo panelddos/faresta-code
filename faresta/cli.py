@@ -265,51 +265,60 @@ def _repl(agent, config, llm):
         console.print(f"[bold white on blue]  YOU  [/bold white on blue] [bold]{user_input}[/bold]")
         console.print("")
 
-        with console.status("[bold cyan]  thinking...[/bold cyan]", spinner="dots"):
-            try:
-                response = agent.run(user_input)
-            except ConnectionError:
-                console.print("\n[red]  ✖ Gagal terhubung ke provider AI. Periksa koneksi internet dan API key.[/red]")
-                _print_status_bar(agent, config)
-                continue
-            except TimeoutError:
-                console.print("\n[red]  ✖ Provider AI tidak merespon — coba lagi nanti atau ganti model/provider.[/red]")
-                _print_status_bar(agent, config)
-                continue
-            except ValueError as e:
-                msg = str(e)
-                if "api key" in msg.lower() or "auth" in msg.lower():
-                    console.print("\n[red]  ✖ API Key tidak valid. Ketik /login untuk set API key baru.[/red]")
-                elif "rate" in msg.lower() or "quota" in msg.lower():
-                    console.print("\n[red]  ✖ Rate limit tercapai atau quota habis. Tunggu beberapa saat.[/red]")
-                else:
-                    console.print(f"\n[red]  ✖ Data tidak valid: {msg[:100]}[/red]")
-                _print_status_bar(agent, config)
-                continue
-            except Exception:
-                import traceback
-                tb = traceback.format_exc()
-                console.print(f"\n[red]  ✖ Terjadi kesalahan yang tidak terduga.[/red]")
-                console.print(f"[dim]  Detail: {tb[:200]}[/dim]")
-                _print_status_bar(agent, config)
-                continue
+        response = ""
+        tool_events = []
+        error_occurred = False
 
-        if response:
-            console.print(f"[bold white on cyan]  FARESTA  [/bold white on cyan]")
+        try:
+            for event in agent.run_streaming(user_input):
+                if event["type"] == "content":
+                    if not response:
+                        console.print(f"[bold white on cyan]  FARESTA  [/bold white on cyan]")
+                        console.print("")
+                    console.print(event["content"], end="", flush=True)
+                    response += event["content"]
+                elif event["type"] == "content_done":
+                    response = event["content"]
+                elif event["type"] == "tool_start":
+                    print_info(f"  Using tool: {event['name']}")
+                elif event["type"] == "tool_result":
+                    tool_events.append(event)
+                elif event["type"] == "done":
+                    response = event["content"]
+        except ConnectionError:
+            console.print("\n[red]  ✖ Gagal terhubung ke provider AI. Periksa koneksi internet dan API key.[/red]")
+            error_occurred = True
+        except TimeoutError:
+            console.print("\n[red]  ✖ Provider AI tidak merespon — coba lagi nanti atau ganti model/provider.[/red]")
+            error_occurred = True
+        except ValueError as e:
+            msg = str(e)
+            if "api key" in msg.lower() or "auth" in msg.lower():
+                console.print("\n[red]  ✖ API Key tidak valid. Ketik /login untuk set API key baru.[/red]")
+            elif "rate" in msg.lower() or "quota" in msg.lower():
+                console.print("\n[red]  ✖ Rate limit tercapai atau quota habis. Tunggu beberapa saat.[/red]")
+            else:
+                console.print(f"\n[red]  ✖ Data tidak valid: {msg[:100]}[/red]")
+            error_occurred = True
+        except Exception:
+            import traceback
+            tb = traceback.format_exc()
+            console.print(f"\n[red]  ✖ Terjadi kesalahan yang tidak terduga.[/red]")
+            console.print(f"[dim]  Detail: {tb[:200]}[/dim]")
+            error_occurred = True
+
+        if response and not error_occurred:
             console.print("")
-            print_markdown(response)
             console.print("")
 
-        tool_msgs = [m for m in agent.messages if m["role"] == "tool" and m not in getattr(agent, '_prev_tool_msgs', [])]
-        agent._prev_tool_msgs = [m for m in agent.messages if m["role"] == "tool"]
-
-        for tm in tool_msgs:
-            fn_name = tm.get("tool_name", "?")
-            res = tm.get("content", "")
+        for ev in tool_events:
+            fn_name = ev["name"]
+            res = ev["content"]
             short = res[:80].replace("\n", " ") + ("..." if len(res) > 80 else "")
-            console.print(f"[dim]  └ {fn_name} → {short}[/dim]")
+            status = "[red]✖[/red]" if ev.get("error") else "[dim]✓[/dim]"
+            console.print(f"  {status} [dim]{fn_name} → {short}[/dim]")
 
-        if tool_msgs:
+        if tool_events:
             console.print("")
 
         _print_status_bar(agent, config)

@@ -4,8 +4,8 @@ from .base import LLMProvider
 
 
 class AnthropicProvider(LLMProvider):
-    def __init__(self, api_key: str, model: str = "claude-sonnet-4-20250514", temperature: float = 0.7, max_tokens: int = 4096):
-        super().__init__(api_key, model, temperature, max_tokens)
+    def __init__(self, api_key: str, model: str = "claude-sonnet-4-20250514", temperature: float = 0.7, max_tokens: int = 4096, effort: str = "medium"):
+        super().__init__(api_key, model, temperature, max_tokens, effort)
         self.client = Anthropic(api_key=api_key)
 
     def _prepare_messages(self, messages: list[dict]) -> tuple[str, list[dict]]:
@@ -81,6 +81,10 @@ class AnthropicProvider(LLMProvider):
         )
         if tools:
             kwargs["tools"] = tools
+        effort_budget = {"low": 1024, "medium": 4096, "high": 16384}
+        budget = effort_budget.get(self.effort, 4096)
+        if self.model.startswith("claude"):
+            kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
         response = self.client.messages.create(**kwargs)
         content = ""
         tool_calls = []

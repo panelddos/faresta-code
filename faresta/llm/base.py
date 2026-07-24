@@ -3,11 +3,12 @@ from typing import Generator
 
 
 class LLMProvider(ABC):
-    def __init__(self, api_key: str, model: str, temperature: float = 0.7, max_tokens: int = 4096):
+    def __init__(self, api_key: str, model: str, temperature: float = 0.7, max_tokens: int = 4096, effort: str = "medium"):
         self.api_key = api_key
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.effort = effort
 
     @abstractmethod
     def chat(self, messages: list[dict], stream: bool = True, tools: list[dict] | None = None) -> Generator[dict, None, None]:

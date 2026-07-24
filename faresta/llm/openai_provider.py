@@ -4,8 +4,8 @@ from .base import LLMProvider
 
 
 class OpenAIProvider(LLMProvider):
-    def __init__(self, api_key: str, model: str = "gpt-4o", temperature: float = 0.7, max_tokens: int = 4096):
-        super().__init__(api_key, model, temperature, max_tokens)
+    def __init__(self, api_key: str, model: str = "gpt-4o", temperature: float = 0.7, max_tokens: int = 4096, effort: str = "medium"):
+        super().__init__(api_key, model, temperature, max_tokens, effort)
         self.client = OpenAI(api_key=api_key)
 
     def chat(self, messages: list[dict], stream: bool = True, tools: list[dict] | None = None) -> Generator[dict, None, None]:
@@ -49,6 +49,9 @@ class OpenAIProvider(LLMProvider):
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
+        effort_map = {"low": "low", "medium": "medium", "high": "high"}
+        if self.model in ("o1", "o3-mini", "o1-mini", "o3"):
+            kwargs["reasoning_effort"] = effort_map.get(self.effort, "medium")
         if tools:
             kwargs["tools"] = tools
         response = self.client.chat.completions.create(**kwargs)

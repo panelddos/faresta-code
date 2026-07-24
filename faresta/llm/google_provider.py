@@ -5,8 +5,8 @@ from .base import LLMProvider
 
 
 class GoogleProvider(LLMProvider):
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash", temperature: float = 0.7, max_tokens: int = 4096):
-        super().__init__(api_key, model, temperature, max_tokens)
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash", temperature: float = 0.7, max_tokens: int = 4096, effort: str = "medium"):
+        super().__init__(api_key, model, temperature, max_tokens, effort)
         self.client = genai.Client(api_key=api_key)
 
     def _prepare_contents(self, messages: list[dict]) -> tuple[str, list]:
@@ -77,12 +77,19 @@ class GoogleProvider(LLMProvider):
         system, history = self._prepare_contents(messages)
         tool_config = self._build_tool_config(tools)
 
-        config = types.GenerateContentConfig(
+        config_kwargs = dict(
             temperature=self.temperature,
             max_output_tokens=self.max_tokens,
             system_instruction=system or None,
             tools=[tool_config] if tool_config else None,
         )
+        effort_map = {"low": "disable", "medium": "enable", "high": "enable"}
+        if effort_map.get(self.effort) == "disable":
+            config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+        elif self.effort == "high":
+            config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=4096)
+
+        config = types.GenerateContentConfig(**config_kwargs)
 
         response = self.client.models.generate_content(
             model=self.model,

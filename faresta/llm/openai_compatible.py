@@ -43,8 +43,8 @@ COMPATIBLE_PROVIDERS = {
 
 
 class OpenAICompatibleProvider(LLMProvider):
-    def __init__(self, api_key: str, model: str = "gpt-4o", temperature: float = 0.7, max_tokens: int = 4096, base_url: str | None = None):
-        super().__init__(api_key, model, temperature, max_tokens)
+    def __init__(self, api_key: str, model: str = "gpt-4o", temperature: float = 0.7, max_tokens: int = 4096, effort: str = "medium", base_url: str | None = None):
+        super().__init__(api_key, model, temperature, max_tokens, effort)
         kwargs = {"api_key": api_key}
         if base_url:
             kwargs["base_url"] = base_url
@@ -109,7 +109,7 @@ class OpenAICompatibleProvider(LLMProvider):
         return result
 
 
-def create_provider(name: str, api_key: str, model: str = "", temperature: float = 0.7, max_tokens: int = 4096) -> OpenAICompatibleProvider:
+def create_provider(name: str, api_key: str, model: str = "", temperature: float = 0.7, max_tokens: int = 4096, effort: str = "medium") -> OpenAICompatibleProvider:
     info = COMPATIBLE_PROVIDERS.get(name)
     if not info:
         raise ValueError(f"Unknown provider '{name}'")
@@ -118,5 +118,6 @@ def create_provider(name: str, api_key: str, model: str = "", temperature: float
         model=model or info["default_model"],
         temperature=temperature,
         max_tokens=max_tokens,
+        effort=effort,
         base_url=info["base_url"],
     )

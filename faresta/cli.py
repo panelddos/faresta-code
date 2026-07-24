@@ -43,6 +43,7 @@ def get_provider(config: Config) -> LLMProvider | None:
             model=config.model,
             temperature=config.temperature,
             max_tokens=config.max_tokens,
+            effort=config.effort,
         )
 
     if config.provider in COMPATIBLE_PROVIDERS:
@@ -52,6 +53,7 @@ def get_provider(config: Config) -> LLMProvider | None:
             model=config.model,
             temperature=config.temperature,
             max_tokens=config.max_tokens,
+            effort=config.effort,
         )
 
     known = ", ".join(list(providers.keys()) + list(COMPATIBLE_PROVIDERS.keys()))
@@ -99,16 +101,13 @@ def ask(question, provider, model, yes):
     print_info(agent.cost_tracker.summary())
 
 
-LOGO = """
-[bold cyan]
-  ▄████████ ████████▄     ▄████████ ████████▄     ▄████████ ████████▄ ████████▄
- ███    ███ ███   ▀███   ███    ███ ███   ▀███   ███    ███ ███   ▀███ ███   ▀███
- ███    █▀  ███    ███   ███    █▀  ███    ███   ███    █▀  ███    ███ ███    ███
- ███        ███    ███  ▄███▄▄▄     ███    ███  ▄███▄▄▄     ███    ███ ███    ███
-███████████ ███    ███ ▀▀███▀▀▀     ███    ███ ▀▀███▀▀▀     ███    ███ ███    ███
-       ███ ███    ███   ███    █▄  ███    ███   ███    █▄  ███    ███ ███    ███
- ▄█    ███ ███   ▄███   ███    ███ ███   ▄███   ███    ███ ███   ▄███ ███   ▄███
-▄████████▀  ████████▀    ██████████ ████████▀    ██████████ ████████▀  ████████▀
+BANNER = """
+[bold cyan]███████╗ █████╗ ██████╗ ███████╗███████╗████████╗ █████╗      ██████╗ ██████╗ ██████╗ ███████╗
+██╔════╝██╔══██╗██╔══██╗██╔════╝██╔════╝╚══██╔══╝██╔══██╗    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
+█████╗  ███████║██████╔╝█████╗  █████╗     ██║   ███████║    ██║     ██║   ██║██║  ██║█████╗
+██╔══╝  ██╔══██║██╔══██╗██╔══╝  ██╔══╝     ██║   ██╔══██║    ██║     ██║   ██║██║  ██║██╔══╝
+██║     ██║  ██║██║  ██║███████╗██║        ██║   ██║  ██║    ╚██████╗╚██████╔╝██████╔╝███████╗
+╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
 [/bold cyan]
 """
 
@@ -155,8 +154,8 @@ def _print_welcome(config):
     print("\033[2J\033[H", end="", flush=True)
     status = "[green]✓[/green]" if config.api_key else "[yellow]⚠ butuh /login[/yellow]"
     console.print(Panel(
-        LOGO + f"\n[bold cyan]Faresta Code[/bold cyan]  v0.5.0\n[dim]AI Coding Assistant CLI[/dim]\n\nModel: [cyan]{config.provider}/{config.model}[/cyan]  Status: {status}",
-        box=box.HEAVY, border_style="cyan", padding=(1, 4), subtitle="[dim]ketik /help untuk bantuan[/dim]"
+        BANNER + f"\n[bold cyan]v0.5.0[/bold cyan] [dim]|[/dim] [cyan]{config.provider}/{config.model}[/cyan] [dim]|[/dim] Status: {status}",
+        box=box.HEAVY, border_style="cyan", padding=(1, 2), subtitle="[dim]ketik /help untuk bantuan[/dim]"
     ))
     console.print("")
     if not config.api_key:

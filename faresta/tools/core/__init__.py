@@ -4,6 +4,7 @@ from .bash import BashTool
 from .web import WebFetchTool, WebSearchTool
 from .git_tools import GitStatusTool, GitDiffTool, GitCommitTool, GitLogTool, GitBranchTool
 from .lint_tools import LintTestTool
+from .project import ProjectIndexTool
 
 
 def register_core_tools():
@@ -14,5 +15,6 @@ def register_core_tools():
         WebFetchTool(), WebSearchTool(),
         GitStatusTool(), GitDiffTool(), GitCommitTool(), GitLogTool(), GitBranchTool(),
         LintTestTool(),
+        ProjectIndexTool(),
     ]:
         register_tool(tool)

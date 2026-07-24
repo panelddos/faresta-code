@@ -54,6 +54,7 @@ class Agent:
         if tools_desc:
             system += f"\n\nAnda memiliki akses ke tools berikut:\n{tools_desc}\n\nGunakan tools saat diperlukan. Jika tool mengembalikan error, jelaskan ke user dan coba pendekatan alternatif."
         system += "\n\nSebelum menjalankan tool, jelaskan secara singkat apa yang akan Anda lakukan dan mengapa."
+        system += "\n\nSetelah Anda mengedit atau menulis file, sistem akan otomatis menjalankan linter. Jika ada error linter, hasilnya akan ditampilkan — perbaiki error tersebut sebelum lanjut."
         self.messages.append({"role": "system", "content": system})
 
     def run(self, user_input: str) -> str:
@@ -67,10 +68,11 @@ class Agent:
             tool_round += 1
             has_tool_calls = False
 
-            assistant_msg = self.llm.chat_non_streaming(
-                messages=self.messages,
-                tools=self._get_tools_for_api(),
-            )
+            with console.status("[bold cyan]Thinking...[/bold cyan]", spinner="dots"):
+                assistant_msg = self.llm.chat_non_streaming(
+                    messages=self.messages,
+                    tools=self._get_tools_for_api(),
+                )
 
             response_text = assistant_msg.get("content", "")
             tool_calls = assistant_msg.get("tool_calls", [])
@@ -123,6 +125,11 @@ class Agent:
 
                     print_info(f"  Using tool: {name}")
                     result = self.registry.execute(name, **args)
+
+                    if not result.startswith("Error") and name in ("edit", "write", "delete"):
+                        lint_result = self.registry.execute("lint_test", command="lint", path=".")
+                        if lint_result and "No recognized" not in lint_result:
+                            result += f"\n\n[auto-lint]\n{lint_result}"
 
                     if "Error" in result[:10] and tool_round < self.max_tool_rounds:
                         print_warning(f"  Tool '{name}' returned error, will retry with explanation")

@@ -11,7 +11,7 @@ console = Console()
 
 def print_welcome():
     title = "[bold cyan]Faresta Code[/bold cyan] — AI Coding Assistant"
-    subtitle = "[dim]Multi-provider LLM CLI[/dim]"
+    subtitle = "[dim]Multi-provider LLM CLI • Agentic mode with tools[/dim]"
     console.print(Panel(f"{title}\n{subtitle}", box=box.ROUNDED, border_style="cyan"))
 
 
@@ -29,6 +29,10 @@ def print_info(msg: str):
 
 def print_success(msg: str):
     console.print(f"[green]✓ {msg}[/green]")
+
+
+def print_warning(msg: str):
+    console.print(f"[yellow]⚠ {msg}[/yellow]")
 
 
 def input_user(prompt: str = "You") -> str:

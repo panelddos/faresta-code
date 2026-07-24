@@ -1,8 +1,16 @@
 # Faresta Code
 
-**AI CLI Assistant** — Multi-provider LLM dengan interface interaktif di terminal.
+**AI CLI Assistant** — Agentic coding assistant dengan multi-provider LLM, tool calling, dan interactive terminal.
 
 Dibuat oleh [Faresta](https://github.com/panelddos).
+
+## Fitur
+
+- **Multi-provider**: OpenAI (GPT-4o), Anthropic (Claude), Google (Gemini)
+- **Agentic mode**: AI bisa menjalankan tools secara otomatis
+- **Tools lengkap**: baca/tulis/edit file, bash, glob, grep, web fetch & search
+- **Streaming response**: real-time output
+- **Interactive chat** dengan context management
 
 ## Instalasi
 
@@ -41,7 +49,7 @@ faresta config-set --api-key sk-... --provider openai --model gpt-4o
 
 ## Penggunaan
 
-### Interactive chat
+### Interactive agentic chat
 
 ```bash
 faresta chat
@@ -63,5 +71,5 @@ faresta ask "Jelaskan React hooks" --provider google --model gemini-2.0-flash
 ### Lihat config
 
 ```bash
-faresta config
+faresta config-show
 ```

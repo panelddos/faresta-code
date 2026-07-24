@@ -10,5 +10,9 @@ class LLMProvider(ABC):
         self.max_tokens = max_tokens
 
     @abstractmethod
-    def chat(self, messages: list[dict], stream: bool = True) -> Generator[str, None, None]:
+    def chat(self, messages: list[dict], stream: bool = True, tools: list[dict] | None = None) -> Generator[dict, None, None]:
+        ...
+
+    @abstractmethod
+    def chat_non_streaming(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
         ...

@@ -5,6 +5,8 @@ from .llm.base import LLMProvider
 from .llm.openai_provider import OpenAIProvider
 from .llm.anthropic_provider import AnthropicProvider
 from .llm.google_provider import GoogleProvider
+from .agent import Agent
+from .tools.core import register_core_tools
 from .utils.display import (
     console, print_welcome, print_markdown, print_error,
     print_info, print_success, input_user,
@@ -37,14 +39,15 @@ def get_provider(config: Config) -> LLMProvider:
 @click.group()
 @click.version_option(version="0.1.0", prog_name="faresta")
 def main():
-    pass
+    register_core_tools()
 
 
 @main.command()
 @click.argument("question", required=False)
 @click.option("-p", "--provider", help="LLM provider (openai, anthropic, google)")
 @click.option("-m", "--model", help="Model name")
-def ask(question, provider, model):
+@click.option("-y", "--yes", is_flag=True, help="Skip confirmation for tool execution")
+def ask(question, provider, model, yes):
     """Ask a single question and get an answer."""
     config = load_config()
     if provider:
@@ -53,27 +56,28 @@ def ask(question, provider, model):
         config.model = model
 
     llm = get_provider(config)
-    msgs = [{"role": "system", "content": config.system_prompt}]
+    agent = Agent(llm, config)
+    agent.add_system_prompt()
 
     if not question:
         question = input_user("Question")
 
-    msgs.append({"role": "user", "content": question})
     console.print("[dim]Faresta:[/dim] ", end="")
-    full = ""
-    for chunk in llm.chat(msgs):
-        print(chunk, end="", flush=True)
-        full += chunk
-    print()
-    print()
-    print_info(f"Provider: {config.provider} | Model: {config.model}")
+    with console.status("[bold cyan]Thinking...[/bold cyan]", spinner="dots"):
+        response = agent.run(question)
+    print_markdown(response)
+
+    tool_count = len([m for m in agent.messages if m["role"] == "tool"])
+    if tool_count > 0:
+        print_info(f"Tools used: {tool_count} calls")
 
 
 @main.command()
 @click.option("-p", "--provider", help="LLM provider (openai, anthropic, google)")
 @click.option("-m", "--model", help="Model name")
-def chat(provider, model):
-    """Start an interactive chat session."""
+@click.option("-y", "--yes", is_flag=True, help="Skip confirmation for tool execution")
+def chat(provider, model, yes):
+    """Start an interactive agentic chat session."""
     config = load_config()
     if provider:
         config.provider = provider
@@ -81,11 +85,13 @@ def chat(provider, model):
         config.model = model
 
     llm = get_provider(config)
-    messages = [{"role": "system", "content": config.system_prompt}]
+    agent = Agent(llm, config)
+    agent.add_system_prompt()
 
     print_welcome()
     print_info(f"Provider: {config.provider} | Model: {config.model}")
-    print_info("Type 'exit' or 'quit' to end, '/clear' to clear history")
+    print_info(f"Tools: {len(agent.registry)} registered")
+    print_info("Type 'exit' or 'quit' to end, '/clear' to reset context")
     print()
 
     while True:
@@ -94,27 +100,23 @@ def chat(provider, model):
             print_info("Goodbye!")
             break
         if user_input.strip() == "/clear":
-            messages = [{"role": "system", "content": config.system_prompt}]
-            print_success("History cleared")
+            agent.reset()
+            print_success("Context cleared")
             continue
         if not user_input.strip():
             continue
 
-        messages.append({"role": "user", "content": user_input})
-        console.print("[dim]Faresta:[/dim] ")
+        with console.status("[bold cyan]Thinking...[/bold cyan]", spinner="dots"):
+            try:
+                response = agent.run(user_input)
+            except Exception as e:
+                print_error(str(e))
+                continue
 
-        full = ""
-        try:
-            for chunk in llm.chat(messages):
-                print(chunk, end="", flush=True)
-                full += chunk
-        except Exception as e:
-            print_error(str(e))
-            messages.pop()
-            continue
+        if response:
+            print_markdown(response)
 
-        messages.append({"role": "assistant", "content": full})
-        print()
+        tool_count = len([m for m in agent.messages if m["role"] == "tool" and m not in getattr(agent, '_prev_tool_count', [])])
         print()
 
 
